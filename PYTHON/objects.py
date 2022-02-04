@@ -7,7 +7,27 @@ from bge import logic
 from game3 import base, keymap, attachment, weapon, powerup, viewport
 
 
-class MachineGun(weapon.CorePlayerWeapon):
+class ZephyrPlayerWeapon(weapon.CorePlayerWeapon):
+
+	def defaultStates(self):
+		super().defaultStates()
+		self.env_dim = None
+		self.active_post.append(self.PS_SetVisible)
+
+	def PS_SetVisible(self):
+		if self.env_dim != None:
+			self.objects["Mesh"].color = self.env_dim
+			self.env_dim = None
+			return
+
+		cls = self.getParent()
+		amb = 0
+		if cls != None:
+			amb = cls.dict.get("DIM", amb)
+		self.objects["Mesh"].color = (amb+1, amb+1, amb+1, 1.0)
+
+
+class MachineGun(ZephyrPlayerWeapon):
 
 	NAME = "Basic SMG"
 	SLOTS = ["Shoulder_R", "Shoulder_L"]
@@ -110,7 +130,7 @@ class MachineGun(weapon.CorePlayerWeapon):
 			self.objects["Mesh"].localOrientation = self.createMatrix()
 
 
-class HandGun(weapon.CorePlayerWeapon):
+class HandGun(ZephyrPlayerWeapon):
 
 	NAME = "Basic Pistol"
 	SLOTS = ["Hip_R", "Hip_L"]

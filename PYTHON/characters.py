@@ -19,6 +19,11 @@ class ActorPlayer(player.CorePlayer):
 		dict["COOLDOWN"] = 0
 		return dict
 
+	def applyContainerProps(self, cls):
+		cls.gravity = self.gravity.copy()
+		cls.air_drag = cls.gravity.length/9.8
+		cls.env_dim = self.objects["Mesh"].color
+
 	def PS_SetVisible(self):
 		super().PS_SetVisible()
 
