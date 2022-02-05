@@ -11,7 +11,7 @@ from game3 import GAMEPATH, base, settings, keymap, world
 DTR = logic.globalDict.get("_DESKTOP", DTR)
 logic.globalDict["_DESKTOP"] = DTR
 
-VER = "3.0"
+VER = "r1.0"
 
 
 def RUN(cont):

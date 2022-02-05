@@ -15,6 +15,9 @@ gd_dump
 sterr*
 stout*
 
+!Launcher.blend
+!Keymap.blend
+!HUD.blend
 !CONTENT/CommonAssets.blend
 !CONTENT/Game Assets HUD.blend
 !CONTENT/Zephyr.blend
