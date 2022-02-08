@@ -19,6 +19,7 @@ config.MAPS_PATH = "MAPS"
 
 config.CAMERA_CLIP = [0.1, 100000]
 config.MOUSE_BUFFER = True   #False to remove mouse input processing
+config.FPS_CAP = 60 #set 0 for uncapped, -1 for use-framerate capped.
 
 config.DEFAULT_PLAYER = "Actor"
 
