@@ -249,6 +249,45 @@ class HandGun(ZephyrPlayerWeapon):
 			self.objects["Mesh"].localOrientation = self.createMatrix()
 
 
+class BasicSword(ZephyrPlayerWeapon):
+
+	NAME = "Pirate Sword"
+	SLOTS = ["Hip_L", "Hip_R"]
+	TYPE = "MELEE"
+	OFFSET = (0, 0.2, 0.15)
+	SCALE = 1
+	BLADELENGTH = 1
+
+	def defaultData(self):
+		self.hitlist = []
+		dict = super().defaultData()
+		return dict
+
+	def ST_Active(self):
+		plr = self.owning_player
+
+		if self.getFirstEvent("WP_FIRE") != None:
+			rfm = self.objects["Blade"].worldPosition
+			rto = rfm+self.objects["Blade"].getAxisVect([0,0,1])
+			rayOBJ, rayPNT, rayNRM = plr.getOwner().rayCast(rto, rfm, self.BLADELENGTH, "", 1, 1, 0)
+
+			if rayOBJ != None and rayOBJ not in self.hitlist:
+				rayOBJ.get("MODIFIERS", []).append({"HEALTH":-20})
+				self.hitlist.append(rayOBJ)
+		else:
+			self.sendEvent("WP_CLEAR")
+
+		if self.getFirstEvent("WP_CLEAR") != None:
+			#for obj in self.hitlist:
+			#	obj.get("MODIFIERS", []).append({"HEALTH":-20})
+			self.hitlist = []
+
+		if self.getFirstEvent("WP_ANIM") != None:
+			self.doPlayerAnim("LOOP")
+
+		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Sword")
+
+
 class PhysicsObject(base.CoreObject):
 
 	NAME = ""
