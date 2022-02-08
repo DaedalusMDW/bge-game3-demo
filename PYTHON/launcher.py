@@ -2,16 +2,16 @@
 
 ## LAUNCHER ##
 
-from bge import logic, render
+from bge import logic, render, texture
 
 DTR = [render.getWindowWidth(), render.getWindowHeight()]
 
-from game3 import GAMEPATH, base, settings, keymap, world
+from game3 import GAMEPATH, firstrun, base, settings, keymap, world
 
 DTR = logic.globalDict.get("_DESKTOP", DTR)
 logic.globalDict["_DESKTOP"] = DTR
 
-VER = "r1.0"
+VER = "2.0"
 
 
 def RUN(cont):
@@ -39,7 +39,28 @@ def RUN(cont):
 
 def VERSION(cont):
 	global VER
-	cont.owner["Text"] = "Ver "+VER
+	cont.owner["Text"] = "Release "+VER
+
+
+def VIDEO(cont):
+	owner = cont.owner
+
+	if keymap.SYSTEM["ESCAPE"].tap() == True or keymap.SYSTEM["UI_SKIP"].tap() or firstrun == False:
+		owner.scene.replace("Scene")
+		owner.endObject()
+		return
+
+	if "TEXTURE" not in owner:
+		owner["VIDEO"] = texture.VideoFFmpeg(GAMEPATH+owner["FILE"])
+		owner["VIDEO"].play()
+		owner["TEXTURE"] = texture.Texture(owner)
+		owner["TEXTURE"].source = owner["VIDEO"]
+
+	if owner["TIME"] >= owner["FRAMES"]/60:
+		owner["SCENE"] = "DONE"
+	else:
+		owner["TEXTURE"].refresh(True)
+		owner["TIME"] += (1/60)
 
 
 def OPEN(cont):

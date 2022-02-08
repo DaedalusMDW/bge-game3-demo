@@ -92,12 +92,6 @@ def moveCursor(cont):
 	scene = owner.scene
 	camera = scene.active_camera
 
-	if FREEZE != None:
-		owner.visible = False
-		return
-	else:
-		owner.visible = True
-
 	camX = (camera.ortho_scale)/2
 	camY = (camera.ortho_scale*keymap.MOUSELOOK.ratio)/2
 
@@ -129,6 +123,9 @@ def moveCursor(cont):
 	owner.localPosition[1] = rlpY
 
 	owner.color[0] = float(DEVICE=="KBM")
+
+	if FREEZE != None:
+		return
 
 	rayto = owner.worldPosition+owner.getAxisVect((0,0,-1))
 

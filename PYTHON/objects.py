@@ -91,14 +91,15 @@ class MachineGun(ZephyrPlayerWeapon):
 				ammo["ROOTOBJ"] = plrobj
 				ammo["DAMAGE"] = 1
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
-				ammo.localScale = (sx, 8+(rnd*4), sz)
+				ammo.localScale = (sx, 16+(rnd*4), sz)
+				ammo.color = (1,1,0,1)
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
 				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
 				gfx.setParent(self.objects["Barrel"], False, False)
-				gfx.color = (1,1,0,1)
-				gfx.localScale = (sx, sy, sz)
+				gfx.localScale = (0.5, 1.0, 0.5)
+				gfx.children[0].color = (1,1,0,1)
 
 				self.data["MAG"] -= 1
 				self.data["COOLDOWN"] = 5
@@ -195,14 +196,15 @@ class HandGun(ZephyrPlayerWeapon):
 				ammo["ROOTOBJ"] = plrobj
 				ammo["DAMAGE"] = 4
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
-				ammo.localScale = (sx, 8+(rnd*4), sz)
+				ammo.localScale = (sx, 16+(rnd*4), sz)
+				ammo.color = (1,1,0,1)
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
 				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
 				gfx.setParent(self.objects["Barrel"], False, False)
-				gfx.color = (1,1,0,1)
-				gfx.localScale = (sx/2, sy/2, sz/2)
+				gfx.localScale = (0.5, 0.5, 0.5)
+				gfx.children[0].color = (1,1,0,1)
 
 				self.data["MAG"] -= 1
 				self.data["COOLDOWN"] = 15

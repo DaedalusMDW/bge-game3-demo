@@ -21,7 +21,11 @@ def BULLET(cont):
 
 		gfx = owner.scene.addObject("GFX_LaserHit", owner, 0)
 		gfx.worldPosition = pnt
-		gfx.localScale = [owner.localScale[0]]*3
+		s = owner.localScale[0]
+		#if s < 0.5:
+		#	s = 0.5
+		gfx.localScale = (s,s,s)
+		gfx.children[0].color = owner.color
 		owner.endObject()
 
 	owner.worldPosition += owner.getAxisVect([0,1,0])*owner.localScale[1]

@@ -1,5 +1,8 @@
 
-from game3 import config
+from game3 import config, input, keymap
+
+# while i dont recommend using lights in libs...
+# blends with lights should be at the top, since lights only affect all loaded after.
 
 config.LIBRARIES = [
 	"CommonAssets",
@@ -15,5 +18,8 @@ config.CAMERA_CLIP = [0.1, 100000]
 config.MOUSE_BUFFER = True   #False to remove mouse input processing
 
 config.DEFAULT_PLAYER = "Actor"
+
+# add a spacebar skip keybind
+keymap.SYSTEM["UI_SKIP"] = input.KeyBase("999.Z", "SPACEKEY", "UI Skip", JOYBUTTON=keymap.joy_msb[0])
 
 print("\n\t...game init...\n")
