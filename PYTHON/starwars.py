@@ -5,7 +5,7 @@ import math
 from bge import logic
 
 from game3 import base, keymap, viewport, HUD, vehicle, weapon
-from PYTHON import objects
+from PYTHON import objects, characters
 
 HYPERLANES = []
 
@@ -606,6 +606,229 @@ class LaserCannon(weapon.CoreWeapon):
 			gfx.setParent(owner, False, False)
 			gfx.localScale = (sx, sx*2, sx)
 			gfx.children[0].color = (1,1,1,1)
+
+
+class Ahsoka(characters.TRPlayer):
+
+	NAME = 'Ahsoka "Snips" Tano'
+	CLASS = "Light"
+	WP_TYPE = "MELEE"
+	INVENTORY = {"Hip_L": "WP_LightSaber_A", "Hip_R": "WP_LightSaber_As"}
+	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
+	OFFSET = (0, 0.03, 0.13)
+	SPEED = 0.12
+	JUMP = 6
+	GND_H = 0.95
+	EYE_H = 1.535
+	EDGE_H = 1.93
+	CROUCH_H = 0.4
+	ACCEL = 15
+	ANIMSET = "Snippy"
+	CAM_TYPE = "THIRD"
+	CAM_HEIGHT = 0.15
+	CAM_MIN = 0.3
+	EDGECLIMB_TIME = 90
+
+	def ST_Startup(self):
+		self.data["ATTACKCHAIN"] = "NONE"
+
+	def doPlayerAnim(self, action="IDLE", blend=10):
+		if self.ANIMOBJ == None or self.data["HEALTH"] <= 0:
+			return
+
+		if action in ["IDLE", "RESET"]:
+			if action == "RESET":
+				self.doAnim(STOP=True)
+				self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0))
+			elif self.data["WPDATA"]["ACTIVE"] == "ACTIVE":
+				self.doAnim(NAME=self.ANIMSET+"MeleeAttack", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			else:
+				self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			self.lastaction = [action, 0]
+
+		elif action == "FORWARD" and self.data["WPDATA"]["ACTIVE"] == "ACTIVE":
+			self.doAnim(NAME=self.ANIMSET+"MeleeRunning", FRAME=(0,39), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			setframe = 39
+
+			if self.lastaction[0] != action:
+				self.lastaction[0] = action
+				self.doAnim(SET=self.lastaction[1]*setframe)
+
+			self.lastaction[1] = self.doAnim(CHECK="FRAME")/setframe
+
+		else:
+			super().doPlayerAnim(action, blend)
+
+	def doPlayerOnGround(self):
+		owner = self.objects["Root"]
+		char = self.objects["Character"]
+
+		move = self.motion["Move"].normalized()
+
+		if self.data["RUN"] == False or self.motion["Move"].length <= 0.7 or self.data["SPEED"] <= 0:
+			mx = 0.035
+		else:
+			mx = self.data["SPEED"]
+
+		vref = viewport.getDirection((move[0], move[1], 0))
+		self.doMovement(vref, mx)
+		self.doMoveAlign(up=False)
+
+		linLV = self.motion["Local"].copy()
+		linLV[2] = 0
+		action = "IDLE"
+
+		if linLV.length > 0.1 and self.data["ATTACKCHAIN"].split("_")[0] != "STAND":
+			action = "FORWARD"
+
+			if linLV[1] < 0:
+				action = "BACKWARD"
+			if linLV[0] > 0.5 and abs(linLV[1]) < 0.5:
+				action = "STRAFE_R"
+			if linLV[0] < -0.5 and abs(linLV[1]) < 0.5:
+				action = "STRAFE_L"
+
+			if linLV.length <= (0.05*60):
+				action = "WALK_"+action
+
+		self.doPlayerAnim(action, blend=10)
+
+		## Jump/Crouch ##
+		if keymap.BINDS["PLR_JUMP"].tap() == True:
+			self.doJump(move=1.0, align=True)
+		elif keymap.BINDS["PLR_DUCK"].active() == True:
+			self.doCrouch(True)
+
+	def weaponLoop(self):
+		pri = self.getSlotChild("Hip_L")
+		sec = self.getSlotChild("Hip_R")
+		move = self.motion["Move"]
+		ac = self.data["ATTACKCHAIN"].split("_")[0]
+
+		if (move.length > 0.01 and ac == "STAND") or (self.jump_state != "NONE" and ac not in ["NONE", "JUMP"]):
+			self.doAnim(STOP=True, LAYER=0)
+			self.doAnim(STOP=True, LAYER=1)
+			self.data["ATTACKCHAIN"] = "NONE"
+			self.data["COOLDOWN"] = 0
+
+			self.sendEvent("WP_CLEAR", pri)
+			self.sendEvent("WP_CLEAR", sec)
+			return
+
+		anim = self.ANIMSET+"MeleeAttack"
+
+		if self.data["COOLDOWN"] <= 0:
+			self.sendEvent("WP_CLEAR", pri)
+			self.sendEvent("WP_CLEAR", sec)
+
+			if self.jump_state != "NONE":
+				if self.motion["Local"][2] > 0:
+					if keymap.BINDS["ATTACK_ONE"].tap() == True:
+						self.doAnim(NAME=anim+"Spin", FRAME=(0,40), LAYER=1, PRIORITY=0, BLEND=0)
+						self.data["COOLDOWN"] = 40
+						self.data["ATTACKCHAIN"] = "JUMP_SPIN"
+						#if self.motion["Local"][2] < 2:
+						#	self.objects["Root"].localLinearVelocity[2] = 2
+				#else:
+					#
+
+			elif move.length > 0.01:
+				if move[1] > 0.01 and abs(move[0]) <= 0.01:
+					if keymap.BINDS["ATTACK_ONE"].tap() == True:
+						self.doAnim(NAME=anim+"Fast", FRAME=(0,35), LAYER=1, PRIORITY=0, BLEND=0)
+						self.data["COOLDOWN"] = 35
+						self.data["ATTACKCHAIN"] = "FORWARD_ONE"
+
+			elif self.data["ATTACKCHAIN"] == "NONE":
+				if keymap.BINDS["ATTACK_ONE"].tap() == True:
+					self.doAnim(NAME=anim, FRAME=(0,50), LAYER=0, PRIORITY=2, BLEND=10)
+					self.data["COOLDOWN"] = 50
+					self.data["ATTACKCHAIN"] = "STAND_ONE"
+				if keymap.BINDS["ATTACK_TWO"].tap() == True:
+					self.doAnim(NAME=anim+"3", FRAME=(0,60), LAYER=1, PRIORITY=0, BLEND=0)
+					self.data["COOLDOWN"] = 60
+					self.data["ATTACKCHAIN"] = "STAND_SPIN"
+
+			elif self.data["ATTACKCHAIN"] == "STAND_ONE":
+				if keymap.BINDS["ATTACK_ONE"].tap() == True:
+					self.doAnim(NAME=anim, FRAME=(50,100), LAYER=0, PRIORITY=2, BLEND=10)
+					self.data["COOLDOWN"] = 50
+					self.data["ATTACKCHAIN"] = "STAND_TWO"
+
+				#elif keymap.BINDS["ATTACK_ONE"].active() == True:
+				#	self.doAnim(NAME=anim, FRAME=(50,50), LAYER=0, PRIORITY=2, BLEND=10)
+				#	self.data["COOLDOWN"] = 0
+				#	self.data["ENERGY"] -= 0.1
+
+				elif self.data["COOLDOWN"] <= -300:
+					self.doAnim(STOP=True, LAYER=0)
+					self.doAnim(STOP=True, LAYER=1)
+					#self.doAnim(NAME=anim+"Fail", FRAME=(0,10), LAYER=0, PRIORITY=2, BLEND=10)
+					self.data["COOLDOWN"] = 0
+					self.data["ATTACKCHAIN"] = "NONE"
+
+				else:
+					self.doAnim(NAME=anim, FRAME=(50,50), LAYER=0, PRIORITY=2, BLEND=10)
+					self.data["COOLDOWN"] -= 1
+
+			elif self.data["ATTACKCHAIN"] != "NONE":
+				self.data["ATTACKCHAIN"] = "NONE"
+
+		else:
+			self.sendEvent("WP_FIRE", pri)
+			self.sendEvent("WP_FIRE", sec)
+
+			self.data["COOLDOWN"] -= 1
+
+	def weaponManager(self):
+		weap = self.data["WPDATA"]
+
+		pri = self.getSlotChild("Hip_L")
+		sec = self.getSlotChild("Hip_R")
+
+		self.data["STRAFE"] = False
+
+		if pri == None:
+			if sec != None:
+				pri = sec
+			else:
+				weap["ACTIVE"] = "NONE"
+				self.active_weapon = None
+				return
+
+		## STATE MANAGER ##
+		if weap["ACTIVE"] == "ACTIVE":
+			L = pri.stateSwitch(True)
+			R = None
+			if sec != None:
+				R = sec.stateSwitch(True)
+
+			if L == True:
+				self.sendEvent("WP_BLADE", pri)
+			if R == True:
+				self.sendEvent("WP_BLADE", sec)
+
+			if L == True and self.player_id != None:
+				self.active_weapon = pri
+				self.weaponLoop()
+
+			self.data["STRAFE"] = True
+
+			if keymap.BINDS["SHEATH"].tap() == True and self.player_id != None:
+				self.doAnim(STOP=True, LAYER=0)
+				self.doAnim(STOP=True, LAYER=1)
+				self.data["ATTACKCHAIN"] = "NONE"
+				weap["ACTIVE"] = "NONE"
+
+		elif weap["ACTIVE"] == "NONE":
+			pri.stateSwitch(False)
+			if sec != None:
+				sec.stateSwitch(False)
+
+			self.active_weapon = None
+
+			if keymap.BINDS["SHEATH"].tap() == True and self.player_id != None:
+				weap["ACTIVE"] = "ACTIVE"
 
 
 class LaserGun(objects.ZephyrPlayerWeapon):

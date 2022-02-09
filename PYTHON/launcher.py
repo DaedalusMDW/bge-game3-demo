@@ -6,7 +6,7 @@ from bge import logic, render, texture
 
 DTR = [render.getWindowWidth(), render.getWindowHeight()]
 
-from game3 import GAMEPATH, firstrun, base, settings, keymap, world
+from game3 import GAMEPATH, firstrun, base, settings, config, keymap, world
 
 DTR = logic.globalDict.get("_DESKTOP", DTR)
 logic.globalDict["_DESKTOP"] = DTR
@@ -251,6 +251,8 @@ def PLAYER(cont):
 	profile = logic.globalDict["PROFILES"][current["Profile"]]
 	WORLD = profile["GLBData"]
 
+	print("PLAYER ENTRY:", s)
+
 	if s == "None":
 		if "PLAYERS" in WORLD:
 			del WORLD["PLAYERS"]
@@ -258,5 +260,10 @@ def PLAYER(cont):
 	else:
 		if "PLAYERS" not in WORLD:
 			WORLD["PLAYERS"] = {}
-		WORLD["PLAYERS"]["1"] = s
+		if s == "":
+			cont.owner["PLAYER"] = WORLD["PLAYERS"].get("1", config.DEFAULT_PLAYER)
+		else:
+			s = s.strip("\n")
+			s = s.strip("\t")
+			WORLD["PLAYERS"]["1"] = s
 
