@@ -405,7 +405,6 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["HUD"]["Lift"] = 0
 
 		mesh.color[1] = (force[1]+1)*0.5
-		owner.color[1] = (force[1]+1)*0.5
 
 		if keymap.BINDS["VEH_ACTION"].tap() == True:
 			self.stateSwitch("HOVER")
@@ -476,8 +475,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["HUD"]["Power"] = 0
 		self.data["HUD"]["Lift"] = 0
 
-		mesh.color[1] = 0
-		owner.color[1] *= 0.95
+		mesh.color[1] *= 0.95
 		steer = torque[2]*0.3
 		brake = 0
 
@@ -521,8 +519,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.setWheelBrake(1, "REAR")
 		owner = self.owner
 		mesh = self.objects["Mesh"]
-		mesh.color[1] = 0
-		owner.color[1] *= 0.95
+		mesh.color[1] *= 0.95
 
 		if self.checkClicked() == True:
 			if self.data["DOCKED"] != None:
@@ -534,8 +531,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.doCameraToggle()
 		owner = self.owner
 		mesh = self.objects["Mesh"]
-		mesh.color[1] = 0
-		owner.color[1] *= 0.95
+		mesh.color[1] *= 0.95
 
 		if self.data["DOCKED"] != None:
 			self.owner.worldPosition += self.owner.getAxisVect([0,0,2])*(1/120)
@@ -551,8 +547,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.doCameraToggle()
 		owner = self.owner
 		mesh = self.objects["Mesh"]
-		mesh.color[1] = 0
-		owner.color[1] *= 0.95
+		mesh.color[1] *= 0.95
 
 		self.data["GLASSFRAME"] += 1
 		if self.data["GLASSFRAME"] >= 60:
@@ -561,8 +556,7 @@ class QuinJet(vehicle.CoreAircraft):
 	def ST_Docked(self):
 		owner = self.owner
 		mesh = self.objects["Mesh"]
-		mesh.color[1] = 0
-		owner.color[1] *= 0.95
+		mesh.color[1] *= 0.95
 
 		pos = self.docking_point
 		ref = [self.createVector(), self.createMatrix()]
