@@ -149,6 +149,12 @@ class Zephyr(world.DynamicWorldTile):
 	CONTAINER = "WORLD"
 	UPDATE = "WORLD"
 	OBJ_HIGH = ["Mesh", "Floors"]
+	OBJ_LOW  = ["Mesh"]
+	OBJ_PROXY = ["Mesh"]
+
+	LOD_ACTIVE = 200
+	LOD_FREEZE = 500
+	LOD_PROXY = 2000
 
 	def defaultData(self):
 		return {"DOCKED": "INIT"}
@@ -170,6 +176,9 @@ class Zephyr(world.DynamicWorldTile):
 		if self.lod_state != lod:
 			self.setLodState(lod)
 		if lod != "ACTIVE":
+			cls = self.getSlotChild("Dock")
+			if cls == None:
+				self.data["DOCKED"] = "INIT"
 			return
 
 		## RUN ##
@@ -227,7 +236,7 @@ class Zephyr(world.DynamicWorldTile):
 			if cls.NAME == "Cargo Ramp":
 				objlist["CBD"].worldOrientation = cls.objects["Panel"][""].worldOrientation.copy()
 			if cls.owner.name == "Z1Dock":
-				if self.data["DOCKED"] != "NONE" or self.getFirstEvent("DOCKING", "QUINJET") != None:
+				if self.data["DOCKED"] not in ["INIT", "NONE"] or self.getFirstEvent("DOCKING", "QUINJET") != None:
 					self.sendEvent("INTERACT", cls, LOCK="Z1QJD")
 			if cls.owner.name == "Z1DockDoor":
 				if self.data["DOCKED"] == "LOCKED":
@@ -387,7 +396,7 @@ class QuinJet(vehicle.CoreAircraft):
 		torque = self.motion["Torque"]
 		linV = owner.localLinearVelocity
 
-		tqx = (torque[0])*200
+		tqx = (torque[0])*400
 		tqy = (torque[1]+force[0])*800
 		tqz = (torque[2])*(400-linV[1])
 
@@ -494,7 +503,7 @@ class QuinJet(vehicle.CoreAircraft):
 
 				fw = pos.getAxisVect([0,1,0])
 				up = -self.gravity.normalized() #pos.getAxisVect([0,0,1])
-				vec = (pos.worldPosition+(up*2))-owner.worldPosition
+				vec = (pos.worldPosition+(up*3))-owner.worldPosition
 				owner.worldPosition += vec*0.01
 				owner.alignAxisToVect(fw, 1, 0.02)
 				owner.alignAxisToVect(up, 2, 0.05)
@@ -534,7 +543,7 @@ class QuinJet(vehicle.CoreAircraft):
 		mesh.color[1] *= 0.95
 
 		if self.data["DOCKED"] != None:
-			self.owner.worldPosition += self.owner.getAxisVect([0,0,2])*(1/120)
+			self.owner.worldPosition += self.owner.getAxisVect([0,0,3])*(1/120)
 
 		self.data["GLASSFRAME"] -= 1
 		if self.data["GLASSFRAME"] <= 0:
