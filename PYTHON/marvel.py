@@ -194,9 +194,9 @@ class Zephyr(world.DynamicWorldTile):
 		## Docking ##
 		if self.data["DOCKED"] == "NONE":
 			rayto = self.objects["Guide"].worldPosition.copy()
-			rayfrom = rayto+self.owner.getAxisVect([0,0,3])
+			rayfrom = rayto+self.owner.getAxisVect([0,0,6])
 
-			rayobj, raypnt, raynrm = self.owner.rayCast(rayto, rayfrom, 3, "", 1, 0, 0)
+			rayobj, raypnt, raynrm = self.owner.rayCast(rayto, rayfrom, 7, "", 1, 0, 0)
 
 			if rayobj != None:
 				cls = rayobj.get("Class", None)
@@ -279,7 +279,7 @@ class QuinJet(vehicle.CoreAircraft):
 	SEATS = {
 		"Seat_1": {"NAME":"Pilot", "DOOR":"Door_1", "CAMERA":[-0.3,8.4,-0.4], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,-6,-1.3]} }
 
-	AERO = {"POWER":1000, "REVERSE":0.2, "HOVER":100, "LIFT":0.1, "TAIL":0, "DRAG":(0.2,0.1,0.6)}
+	AERO = {"POWER":1000, "REVERSE":0.2, "HOVER":100, "LIFT":0, "TAIL":0, "DRAG":(0.2,0.1,0.6)}
 
 	def defaultData(self):
 		self.docking_point = None
@@ -305,8 +305,8 @@ class QuinJet(vehicle.CoreAircraft):
 
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]
-		g = self.data.get("GLASSFRAME", 60)
 
+		g = self.data.get("GLASSFRAME", 60)
 		cls = self.getParent()
 
 		if self.dict["Parent"] != "Dock" or cls == None:
@@ -326,7 +326,6 @@ class QuinJet(vehicle.CoreAircraft):
 
 		self.doLandingGear(init=True)
 		self.active_post.append(self.airDrag)
-		self.active_post.append(self.airLift)
 
 	def stateSwitch(self, state=None):
 		if state != None:
@@ -413,7 +412,8 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["HUD"]["Power"] = (force[1]+1)*50
 		self.data["HUD"]["Lift"] = 0
 
-		mesh.color[1] = (force[1]+1)*0.5
+		t = (force[1]+1)*0.5
+		mesh.color[1] += (t-mesh.color[1])*0.1
 
 		if keymap.BINDS["VEH_ACTION"].tap() == True:
 			self.stateSwitch("HOVER")
@@ -471,7 +471,7 @@ class QuinJet(vehicle.CoreAircraft):
 			owner.applyTorque((0, ty*owner.mass*20, 0), True)
 
 			if self.data["LANDSTATE"] == "LAND":
-				rayto = owner.worldPosition+self.gravity #owner.getAxisVect([0,0,-1])
+				rayto = owner.worldPosition+self.gravity
 
 				if force[2] < 0.01 and owner.rayCastTo(rayto, 3, "GROUND") != None:
 					owner.applyForce([0,0,self.gravity.length*owner.mass*-0.5], True)
