@@ -9,7 +9,7 @@ class PlanetTile(world.DynamicWorldTile):
 
 	NAME = "World Tile"
 	LOD_ACTIVE = 1500
-	LOD_FREEZE = 5000
+	LOD_FREEZE = 7000
 	LOD_PROXY = 50000
 	OBJ_HIGH = ["Mesh", "Sea", "Details", "Atmo"]
 	OBJ_LOW  = ["Mesh", "Atmo"]
@@ -49,7 +49,9 @@ class PlanetTile(world.DynamicWorldTile):
 		return False
 
 	def getEnvMix(self, dvec, svec):
-		dt = (svec.normalized().dot(-dvec.normalized())*0.5)+0.5
+		dt = svec.normalized().dot(-dvec.normalized())
+		if dt < 0:
+			dt = 0
 		return dt
 
 
@@ -61,5 +63,6 @@ class LavaPlanetTile(PlanetTile):
 			dt = 0
 		if dt > 1:
 			dt = 1
+		dt = dt**2
 		return dt
 

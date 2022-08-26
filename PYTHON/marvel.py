@@ -23,7 +23,9 @@ class ZephyrShip(base.CoreObject):
 	HUDLAYOUT = HUD.LayoutCinema
 
 	def defaultData(self):
-		return {"HUD":{"Subtitles":None}}
+		dict = super().defaultData()
+		dict["HUD"] = {"Subtitles":None}
+		return dict
 
 	def doLoad(self):
 		if base.WORLD["MARVEL"]["Dict"] == None:
@@ -152,18 +154,56 @@ class Zephyr(world.DynamicWorldTile):
 	OBJ_LOW  = ["Mesh"]
 	OBJ_PROXY = ["Mesh"]
 
-	LOD_ACTIVE = 200
-	LOD_FREEZE = 500
-	LOD_PROXY = 2000
+	LOD_ACTIVE = 500
+	LOD_FREEZE = 1000
+	LOD_PROXY = 5000
 
 	def defaultData(self):
-		return {"DOCKED": "INIT"}
+		self.env_objects = [
+		{"POS":self.createVector(vec=( 3.0,-6.0,-3.0)), "R":12, "C":(0.5, 0.5, 0.5)},
+		{"POS":self.createVector(vec=(-2.5,-6.0,-3.0)), "R":12, "C":(0.5, 0.5, 0.5)},
+		{"POS":self.createVector(vec=(-3.5,-1.0,-3.0)), "R":12, "C":(0.5, 0.5, 0.5)},
+
+		{"POS":self.createVector(vec=( 3.0, 7.0, 0.5)), "R":10, "C":(0.5, 0.5, 0.5)},
+		{"POS":self.createVector(vec=(-3.0, 7.0, 0.5)), "R":10, "C":(0.5, 0.5, 0.5)},
+
+		{"POS":self.createVector(vec=(0, -3, 4)), "R":16},
+
+		{"POS":self.createVector(vec=(0, 20, 1)), "R":20, "C":(0.2, 0.3, 1.0)},
+
+		{"POS":self.createVector(vec=(-1.5, 28, 1.5)), "R":28},
+		{"POS":self.createVector(vec=( 0.0,-15, 2.5)), "R":28}
+		]
+
+		dict = super().defaultData()
+		dict["DOCKED"] = "INIT"
+
+		return dict
 
 	def defaultChildren(self):
 		items = []
 		dict = {"Object":"QuinJet", "Data":None, "Parent":"Dock"}
 		items.append(dict)
 		return items
+
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+
+		pos = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
+		ac = [1,1,1]
+
+		for dc in self.env_objects:
+			ref = dc["POS"]
+			dst = dc["R"]
+			vec = pos-ref
+			if vec.length < dst:
+				c = dc.get("C", (1,1,1))
+				v = ((dst-vec.length)/dst)**2
+				ac[0] += c[0]*v*0.7
+				ac[1] += c[1]*v*0.7
+				ac[2] += c[2]*v*0.7
+
+		cls.env_dim = (ac[0], ac[1], ac[2], 1.0)
 
 	def ST_Startup(self):
 		owner = self.objects["Root"]
@@ -249,14 +289,15 @@ class QuinJet(vehicle.CoreAircraft):
 	LANDACTION = "QJLand"
 	LANDFRAMES = [100, 0]
 
-	INVENTORY = {}
-	SLOTS = {}
+	INVENTORY = {"Gun_L":"WP_ZCannon", "Gun_R":"WP_ZCannon", "Missile_L":"WP_ZMissile", "Missile_R":"WP_ZMissile"}
+	SLOTS = {"ONE":"Gun", "TWO":"Missile"}
 
 	CAM_RANGE = (20, 36)
 	CAM_ZOOM = 3
 	CAM_MIN = 1
 	CAM_SLOW = 5
 	CAM_HEIGHT = 0.1
+	CAM_HEAD_G = 25
 	CAM_OFFSET = (0,0,1)
 
 	WH_FRONT = 6
@@ -283,8 +324,10 @@ class QuinJet(vehicle.CoreAircraft):
 
 	def defaultData(self):
 		self.docking_point = None
+
 		dict = super().defaultData()
 		dict["DOCKED"] = "INIT"
+
 		return dict
 
 	def applyModifier(self, dict):
@@ -293,31 +336,41 @@ class QuinJet(vehicle.CoreAircraft):
 		super().applyModifier(dict)
 
 	def createVehicle(self):
-		if self.data.get("LANDSTATE", None) == "FLY" or self.data["DOCKED"] != None:
+		if self.data["DOCKED"] != None:
 			return
 		super().createVehicle()
 
 	def airDrag(self):
+		owner = self.getOwner()
+
+		linV = owner.worldLinearVelocity
 		dampLin = 0.3
 		dampRot = 0.6
 
-		self.owner.setDamping(dampLin, dampRot)
+		owner.setDamping(dampLin, dampRot)
+
+		if linV.length > 30:
+			self.doDragForce((0.2,0,0.5))
 
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]
 
-		g = self.data.get("GLASSFRAME", 60)
+		g = self.data.get("GLASSFRAME", 120)
 		cls = self.getParent()
 
 		if self.dict["Parent"] != "Dock" or cls == None:
 			if self.data["DOCKED"] == "INIT":
 				self.data["DOCKED"] = None
 				self.createVehicle()
+			if self.active_state == self.ST_Cruise:
+				self.doAnim(NAME="QJHover", FRAME=(0,0), LAYER=2)
+			else:
+				self.doAnim(NAME="QJHover", FRAME=(100,100), LAYER=2)
 		else:
 			if self.data["DOCKED"] == "INIT":
 				self.data["DOCKED"] = 0
 				self.data["LANDSTATE"] = "FLY"
-			self.doAnim(NAME="QJDock", FRAME=(120,120))
+			self.doAnim(NAME="QJDock", FRAME=(120,120), LAYER=2)
 			g = 120
 			print("INIT DOCK")
 
@@ -337,44 +390,47 @@ class QuinJet(vehicle.CoreAircraft):
 
 		g = 60
 		if self.data["DOCKED"] != None:
-			g = 120
+			g = 0
 
 		if state == "DRIVER":
 			self.setPhysicsType("RIGID")
 			self.data["DOCKED"] = None
-			self.doAnim(NAME="QJGlass", FRAME=(0,-1), LAYER=1)
+			self.doAnim(NAME="QJHover", FRAME=(100,100), LAYER=2)
+			self.doAnim(NAME="QJGlass", FRAME=(0,0), LAYER=1)
 			self.active_state = self.ST_Active
 
 		elif state == "ENTER":
 			self.assignCamera()
-			self.data["GLASSFRAME"] = g
+			self.data["GLASSFRAME"] = 120
 			if self.data["DOCKED"] != None:
-				self.doAnim(NAME="QJDock", FRAME=(120,0), BLEND=10)
-			self.doAnim(NAME="QJGlass", FRAME=(g,0), LAYER=1)
+				self.doAnim(NAME="QJDock", FRAME=(180,0), LAYER=2, BLEND=10)
+			self.doAnim(NAME="QJGlass", FRAME=(120,0), LAYER=1)
 			self.active_state = self.ST_Enter
 
 		elif state == "EXIT":
-			self.data["GLASSFRAME"] = 0
-			self.doAnim(NAME="QJGlass", FRAME=(0,g), LAYER=1)
+			self.data["GLASSFRAME"] = g
+			self.doAnim(NAME="QJGlass", FRAME=(g,120), LAYER=1)
 			self.active_state = self.ST_Exit
 
 		elif state == "IDLE":
 			if self.removeFromSeat(self.driving_seat, force=None) == True:
-				self.data["GLASSFRAME"] = g
-				self.doAnim(NAME="QJGlass", FRAME=(g,g), LAYER=1)
+				self.data["GLASSFRAME"] = 120
+				self.doAnim(NAME="QJGlass", FRAME=(120,120), LAYER=1)
 				self.active_state = self.ST_Idle
 			else:
 				self.stateSwitch("ENTER")
 
 		elif state == "HOVER":
+			self.doAnim(NAME="QJHover", FRAME=(0,100), LAYER=2, BLEND=10)
 			self.active_state = self.ST_Active
 
 		elif state == "CRUISE":
+			self.doAnim(NAME="QJHover", FRAME=(100,0), LAYER=2, BLEND=10)
 			self.data["LANDSTATE"] = "FLY"
 			self.active_state = self.ST_Cruise
 
 		elif state == "DOCK":
-			self.doAnim(NAME="QJDock", FRAME=(0,120), BLEND=10)
+			self.doAnim(NAME="QJDock", FRAME=(0,120), LAYER=2, BLEND=10)
 			self.setPhysicsType("NONE")
 			self.owner.localLinearVelocity = [0,0,0]
 			self.owner.localAngularVelocity = [0,0,0]
@@ -407,15 +463,13 @@ class QuinJet(vehicle.CoreAircraft):
 
 		owner.applyForce(-self.gravity*owner.mass, False)
 
-		self.doDragForce((0.2,0,0.5))
-
 		self.data["HUD"]["Power"] = (force[1]+1)*50
 		self.data["HUD"]["Lift"] = 0
 
 		t = (force[1]+1)*0.5
 		mesh.color[1] += (t-mesh.color[1])*0.1
 
-		if keymap.BINDS["VEH_ACTION"].tap() == True:
+		if keymap.BINDS["TOGGLEMODE"].tap() == True:
 			self.stateSwitch("HOVER")
 
 	def ST_Active(self):
@@ -476,6 +530,19 @@ class QuinJet(vehicle.CoreAircraft):
 				if force[2] < 0.01 and owner.rayCastTo(rayto, 3, "GROUND") != None:
 					owner.applyForce([0,0,self.gravity.length*owner.mass*-0.5], True)
 
+		## WEAPONS ##
+		for slot in self.data["SLOTS"]:
+			for side in ["_L", "_R"]:
+				key = self.data["SLOTS"][slot]
+				cls = self.getSlotChild(slot+side)
+				if cls != None:
+					#if keymap.BINDS[key].tap() == True:
+					cls.stateSwitch(True)
+					if slot == "Gun" and keymap.BINDS["ATTACK_ONE"].active() == True:
+						self.sendEvent("WP_FIRE", cls)
+					if slot == "Missile" and keymap.BINDS["ATTACK_TWO"].active() == True:
+						self.sendEvent("WP_FIRE", cls, "TAP")
+
 		## EXTRAS ##
 		owner.addDebugProperty("X", True)
 		owner.addDebugProperty("Y", True)
@@ -518,10 +585,17 @@ class QuinJet(vehicle.CoreAircraft):
 					owner.localPosition = self.docking_point[0]
 					owner.localOrientation = self.docking_point[1]
 
+				for slot in self.data["SLOTS"]:
+					for side in ["_L", "_R"]:
+						key = self.data["SLOTS"][slot]
+						cls = self.getSlotChild(side+slot)
+						if cls != None:
+							cls.stateSwitch(False)
+
 		elif keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
 			self.stateSwitch("EXIT")
 
-		elif keymap.BINDS["VEH_ACTION"].tap() == True:
+		elif keymap.BINDS["TOGGLEMODE"].tap() == True:
 			self.stateSwitch("CRUISE")
 
 	def ST_Idle(self):
@@ -542,11 +616,19 @@ class QuinJet(vehicle.CoreAircraft):
 		mesh = self.objects["Mesh"]
 		mesh.color[1] *= 0.95
 
-		if self.data["DOCKED"] != None:
-			self.owner.worldPosition += self.owner.getAxisVect([0,0,3])*(1/120)
-
 		self.data["GLASSFRAME"] -= 1
-		if self.data["GLASSFRAME"] <= 0:
+
+		g = 60
+		if self.data["DOCKED"] != None:
+			g = -60
+			if self.data["GLASSFRAME"] < 60:
+				fac = (1/120)
+				self.owner.localPosition += self.createVector(vec=(0,0,3*fac))
+				ref = self.owner.localOrientation
+				ori = self.createMatrix(rot=(-5*fac,0,0), deg=True)
+				self.owner.localOrientation = ref*ori
+
+		if self.data["GLASSFRAME"] <= g:
 			if self.data["DOCKED"] != None:
 				self.removeContainerParent()
 			self.stateSwitch()
@@ -559,7 +641,7 @@ class QuinJet(vehicle.CoreAircraft):
 		mesh.color[1] *= 0.95
 
 		self.data["GLASSFRAME"] += 1
-		if self.data["GLASSFRAME"] >= 60:
+		if self.data["GLASSFRAME"] >= 120:
 			self.stateSwitch("IDLE")
 
 	def ST_Docked(self):

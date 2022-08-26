@@ -6,6 +6,11 @@ from mathutils import Vector, Matrix
 
 from bge import logic, events, render
 
+render.setVsync(render.VSYNC_ON)
+render.showFramerate(False)
+render.showProfile(False)
+render.showProperties(False)
+
 from game3 import keymap, input, settings, config, world
 
 
@@ -15,10 +20,6 @@ GAMEPAD = [0,0]
 
 
 def buildKeys(cont):
-
-	render.showFramerate(False)
-	render.showProfile(False)
-	render.showProperties(False)
 
 	owner = cont.owner
 	scene = owner.scene
@@ -92,8 +93,16 @@ def moveCursor(cont):
 	scene = owner.scene
 	camera = scene.active_camera
 
+	if FREEZE != None:
+		owner.visible = False
+		return
+	else:
+		owner.visible = True
+
 	camX = (camera.ortho_scale)/2
 	camY = (camera.ortho_scale*keymap.MOUSELOOK.ratio)/2
+
+	RAW_X, RAW_Y = events.MOUSEMOVE["Move"]
 
 	X, Y = keymap.MOUSELOOK.axis(ui=True)
 
@@ -123,9 +132,6 @@ def moveCursor(cont):
 	owner.localPosition[1] = rlpY
 
 	owner.color[0] = float(DEVICE=="KBM")
-
-	if FREEZE != None:
-		return
 
 	rayto = owner.worldPosition+owner.getAxisVect((0,0,-1))
 
@@ -329,14 +335,14 @@ class MouseSettings:
 		if self.objects["SPEED"]["RAYCAST"] == True:
 			self.objects["SPEED"].color = self.COL_ON
 			if keymap.SYSTEM["LEFTCLICK"].active() == True:
-				FREEZE = self.setSpeed
+				self.setSpeed()
 		else:
 			self.objects["SPEED"].color = self.COL_OFF
 
 		if self.objects["SMOOTH"]["RAYCAST"] == True:
 			self.objects["SMOOTH"].color = self.COL_ON
 			if keymap.SYSTEM["LEFTCLICK"].active() == True:
-				FREEZE = self.setSmooth
+				self.setSmooth()
 		else:
 			self.objects["SMOOTH"].color = self.COL_OFF
 

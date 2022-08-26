@@ -16,10 +16,10 @@ class HyperLane(base.CoreObject):
 	CONTAINER = "WORLD"
 
 	def defaultData(self):
-		name = self.owner.get("NAME", self.owner.name)
-		radius = self.owner.get("RADIUS", 0)
+		dict = super().defaultData()
+		dict["NAME"] = self.owner.get("NAME", self.owner.name)
+		dict["RADIUS"] = self.owner.get("RADIUS", 0)
 
-		dict = {"RADIUS":radius, "NAME":name}
 		return dict
 
 	def ST_Startup(self):
@@ -43,11 +43,17 @@ class HyperRing(base.CoreObject):
 
 	def defaultData(self):
 		self.docking_point = None
-		dict = {"DOCKED":"NONE", "FRAME":0, "BACON":None}
+		self.gfx = None
+
+		dict = super().defaultData()
+		dict["DOCKED"] = "NONE"
+		dict["FRAME"] = 0
+		dict["BACON"] = None
+
 		return dict
 
 	def ST_Startup(self):
-		self.objects["Glow"].color = (1,1,0,1)
+		self.objects["Fire"].color = (1,1,0,1)
 		self.objects["Guide"].visible = False
 		self.objects["HUD"].visible = False
 		self.objects["HUD"].color = (0.5,0.5,0.5,1)
@@ -177,15 +183,34 @@ class HyperRing(base.CoreObject):
 
 	def ST_Travel(self):
 		owner = self.owner
+
+		if self.gfx == None:
+			self.gfx = owner.scene.addObject("GFX_Hyper", owner, 0)
+			self.gfx.setParent(owner, False, False)
+
+		self.gfx["FRAME"] = self.data["FRAME"]
+
 		pos = self.createVector(vec=self.data["BACON"])
 		vec = pos-(owner.worldPosition+base.ORIGIN_OFFSET)
-		owner.worldPosition += vec.normalized()*self.SPEED
+		fac = (self.data["FRAME"]/60)**2
+		if fac > 1:
+			fac = 1
+
+		if self.data["FRAME"] < 60 or self.data["FRAME"] > 65:
+			self.data["FRAME"] += 1
+		elif vec.length < self.SPEED*30:
+			self.data["FRAME"] = 70
+
+		owner.worldPosition += vec.normalized()*self.SPEED*fac
+
 		if vec.length <= self.SPEED*2:
-			self.objects["Glow"].color = (1,1,0,1)
+			self.gfx.endObject()
+			self.gfx = None
+			self.objects["Fire"].color = (1,1,0,1)
 			self.stateSwitch("RELEASE")
 		else:
 			owner.alignAxisToVect(vec, 1, 0.1)
-			self.objects["Glow"].color = (1,1,1,1)
+			self.objects["Fire"].color = (1,1,1,1)
 
 	def ST_Docking(self):
 		owner = self.owner
@@ -226,6 +251,7 @@ class Starfighter(vehicle.CoreAircraft):
 	CAM_ZOOM = 3
 	CAM_MIN = 1
 	#CAM_SLOW = 3
+	CAM_HEAD_G = 40
 
 	WH_FRONT = 3
 	WH_REAR = -1
@@ -247,12 +273,14 @@ class Starfighter(vehicle.CoreAircraft):
 	SEATS = {
 		"Seat_1": {"NAME":"Pilot", "DOOR":"Root", "CAMERA":[0,-1.75,0.65], "ACTION":"SeatLow", "VISIBLE":True, "SPAWN":[-1.5,-2.5,0]} }
 
-	AERO = {"POWER":10000, "REVERSE":0.5, "HOVER":500, "LIFT":0, "TAIL":0, "DRAG":(2,0.2,2)}
+	AERO = {"POWER":10000, "REVERSE":0.2, "HOVER":500, "LIFT":0, "TAIL":0, "DRAG":(2,0.2,2)}
 
 	def defaultData(self):
 		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["ATTACKMODE"] = True
+		dict["FLYMODE"] = 0
 		dict["COOLDOWN"] = 0
 		dict["HARDPOINT"] = "R"
 
@@ -263,16 +291,11 @@ class Starfighter(vehicle.CoreAircraft):
 			dict["HEALTH"] *= 0.25
 		super().applyModifier(dict)
 
-	def createVehicle(self):
-		if self.data.get("LANDSTATE", None) == "FLY":
-			return
-		super().createVehicle()
-
 	def airDrag(self):
 		linV = self.owner.localLinearVelocity
 
 		dampLin = 0.0
-		dampRot = (linV.length*0.01)+0.5
+		dampRot = (linV.length*0.01)+0.6
 
 		if dampRot >= 0.8:
 			dampRot = 0.8
@@ -293,8 +316,8 @@ class Starfighter(vehicle.CoreAircraft):
 
 		self.owner.applyForce((-DRAG_X, -DRAG_Y, -DRAG_Z), True)
 
-		self.owner["SPEED"] = str(round(linV[1],2))
-		self.owner.addDebugProperty("SPEED", True)
+		#self.owner["SPEED"] = str(round(linV[1],2))
+		#self.owner.addDebugProperty("SPEED", True)
 
 	def airLift(self):
 		linV = self.owner.localLinearVelocity
@@ -302,7 +325,7 @@ class Starfighter(vehicle.CoreAircraft):
 
 		self.lift = 0
 
-		if linV.length > 10:
+		if self.data["FLYMODE"] >= 1:
 			self.lift = self.owner.mass*self.gravity.length
 
 		self.owner.applyForce(grav*self.lift, False)
@@ -339,7 +362,7 @@ class Starfighter(vehicle.CoreAircraft):
 
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]
-		self.objects["Glow"].color = (0,0,1,1)
+		self.objects["Fire"].color = (0,0,1,1)
 		self.doLandingGear(init=True)
 		g = self.data.get("GLASSFRAME", 120)
 		self.doAnim(NAME="StarfighterRigGlass", FRAME=(g,g), LAYER=1)
@@ -402,23 +425,26 @@ class Starfighter(vehicle.CoreAircraft):
 			self.active_state = self.ST_Active
 
 	def PS_SetVisible(self):
-		if self.env_dim != None:
-			self.objects["Mesh"].color = self.env_dim
-			self.env_dim = None
-			return
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
 
-		cls = self.getParent()
-		amb = 0
-		if cls != None:
-			amb = cls.dict.get("DIM", amb)
-		self.objects["Mesh"].color = (amb+1, amb+1, amb+1, 1.0)
+		self.objects["Mesh"].color = self.env_dim
+
+		for cls in self.getChildren():
+			cls.env_dim = self.env_dim
+
+		self.env_dim = None
 
 	## ACTIVE STATE ##
 	def ST_Active(self):
 		self.getInputs()
 
 		owner = self.objects["Root"]
-		glow = self.objects["Glow"]
+		mesh = self.objects["Fire"]
 
 		force = self.motion["Force"]
 		torque = self.motion["Torque"]
@@ -426,7 +452,7 @@ class Starfighter(vehicle.CoreAircraft):
 
 		## FORCES ##
 		power, hover = self.getEngineForce()
-		strafe = 0
+		strafe = force[0]*200
 
 		fac = self.data["POWER"]/self.AERO["POWER"]
 
@@ -438,30 +464,90 @@ class Starfighter(vehicle.CoreAircraft):
 		tqz = torque[2]*(300+(mx*6))
 
 		if self.gravity.length < 1:
-			strafe = force[0]*500
 			hover = force[2]*500
+			strafe = force[0]*500
 			self.data["HOVER"][0] = 1000
 			self.data["HOVER"][1] = 0
 			self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
 		else:
 			self.data["HUD"]["Lift"] = (self.data["HOVER"][0]/9.8)+((self.data["HOVER"][1]/self.AERO["HOVER"])*33)
 
-		if self.data["LANDSTATE"] == "LAND":
-			power = force[1]*500
-			self.data["POWER"] = 0
+		## FLY mODES ##
+		if self.data["FLYMODE"] == 0:
+			power = force[1]*1000
 			fac = abs(force[1]*0.1)
+			self.data["POWER"] = 0
+
+			if keymap.BINDS["TOGGLEMODE"].tap() == True and self.data["LANDSTATE"] == "FLY":
+				self.data["LANDSTATE"] = "FLYLOCK"
+				self.data["FLYMODE"] = 1
+
+			self.objects["HUD"]["HV"].color[0] = 1
+			self.objects["HUD"]["HV"].color[1] = 0
+
+		else:
+			power += 3000
+			power *= (self.data["FLYMODE"]/100)
+			hover = force[2]*1000
+			strafe = force[0]*1000
+
+			self.data["HOVER"][0] = 1000
+			self.data["HOVER"][1] = 0
+
+			if self.data["FLYMODE"] < 100:
+				self.data["FLYMODE"] += 1
+			else:
+				self.data["FLYMODE"] = 100
+
+			if keymap.BINDS["TOGGLEMODE"].tap() == True:
+				self.data["LANDSTATE"] = "FLY"
+				self.data["FLYMODE"] = 0
+
+			self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
+			self.objects["HUD"]["HV"].color[0] = 0
+			self.objects["HUD"]["HV"].color[1] = 0
+
+		## LANDING GEAR ##
+		if self.data["LANDSTATE"] == "LAND":
+			power *= 0.5
+			rayobj = False
+			if self.gravity.length >= 1 and force[2] < 0.1:
+				rayto = owner.worldPosition+self.gravity
+				rayobj = owner.rayCastTo(rayto, 0.8, "GROUND")
+
+			if rayobj == None:
+				power *= 0.5
+				hover *= 0.5
+				owner.applyForce(-self.gravity*owner.mass*0.5, False)
+
+				up = self.gravity.normalized()
+				tx = (self.toDeg(up.angle(owner.getAxisVect((0,-1,0))))-90)/90
+				ty = (self.toDeg(up.angle(owner.getAxisVect((1,0,0))))-90)/90
+				gz = up.dot(owner.getAxisVect((0,0,-1)))
+				if gz < 0:
+					hover = force[2]*200
+					owner.applyForce(-self.gravity*owner.mass*0.5, False)
+					tx = 1-(2*(tx<0))
+					ty = 1-(2*(ty<0))
+				owner.applyTorque((tx*300, ty*200, 0), True)
+			elif rayobj != False:
+				power = 0
+				strafe = 0
+				self.data["HOVER"][0] -= 10
+
 			self.objects["HUD"]["LG"].color[0] = 1
-			self.objects["HUD"]["LG"].color[1] = 0
+			self.objects["HUD"]["LG"].color[1] = 1*(self.data["LANDFRAME"]>1)
+
 		else:
 			self.objects["HUD"]["LG"].color[0] = 0
-			self.objects["HUD"]["LG"].color[1] = 0
+			self.objects["HUD"]["LG"].color[1] = 1*(self.data["LANDFRAME"]<99)
 
-		owner.applyForce([strafe, power, hover], True) #-(linV[1]*1*fac)
+		owner.applyForce([strafe, power, hover], True)
 		owner.applyTorque([tqx, tqy, tqz], True)
 
 		## EXTRAS ##
-		glow.color[0] = abs(fac)
-		glow.color[1] += (1-glow.color[1])*0.02
+		mesh.color[0] = abs(fac)
+		mesh.color[1] += (1-mesh.color[1])*0.02
 
 		self.data["HUD"]["Power"] = abs(fac)*100
 
@@ -503,7 +589,7 @@ class Starfighter(vehicle.CoreAircraft):
 
 		## TOGGLES ##
 		evt = self.getFirstEvent("DOCKING", "HYPERRING")
-		if evt != None:
+		if evt != None and self.data["FLYMODE"] == 0:
 			pos = evt.getProp("GUIDE")
 			if pos != None:
 				ref = self.getTransformDiff(pos)
@@ -526,6 +612,7 @@ class Starfighter(vehicle.CoreAircraft):
 		self.getInputs()
 
 		owner = self.objects["Root"]
+		mesh = self.objects["Fire"]
 
 		cls = self.getParent()
 
@@ -570,12 +657,12 @@ class Starfighter(vehicle.CoreAircraft):
 		self.setWheelBrake(10, "REAR")
 		self.doCameraToggle()
 
-		glow = self.objects["Glow"]
-		glow.color[1] += (0-glow.color[1])*0.02
+		mesh = self.objects["Fire"]
+		mesh.color[1] += (0-mesh.color[1])*0.02
 
 		self.data["GLASSFRAME"] += 1
 		if self.data["GLASSFRAME"] >= 120:
-			glow.color[1] = 0
+			mesh.color[1] = 0
 			self.stateSwitch("IDLE")
 
 
@@ -596,7 +683,7 @@ class LaserCannon(weapon.CoreWeapon):
 			ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 			ammo.alignAxisToVect(owner.getAxisVect((0,1,0)), 1, 1.0)
 			ammo["ROOTOBJ"] = plrobj
-			ammo["DAMAGE"] = 40
+			ammo["DAMAGE"] = float(fire.getProp("DAMAGE", 40))
 			ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 			ammo.localScale = (sx, sy+ammo["LINV"].length, sz)
 			ammo.color = (1,1,1,1)
@@ -615,10 +702,10 @@ class Ahsoka(characters.TRPlayer):
 	WP_TYPE = "MELEE"
 	INVENTORY = {"Hip_L": "WP_LightSaber_A", "Hip_R": "WP_LightSaber_As"}
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
-	OFFSET = (0, 0.03, 0.13)
+	OFFSET = (0, 0.03, 0.16)
 	SPEED = 0.12
 	JUMP = 6
-	GND_H = 0.95
+	GND_H = 1.0
 	EYE_H = 1.535
 	EDGE_H = 1.93
 	CROUCH_H = 0.4
@@ -629,8 +716,17 @@ class Ahsoka(characters.TRPlayer):
 	CAM_MIN = 0.3
 	EDGECLIMB_TIME = 90
 
-	def ST_Startup(self):
-		self.data["ATTACKCHAIN"] = "NONE"
+	def defaultData(self):
+		dict = super().defaultData()
+		dict["ATTACKCHAIN"] = "NONE"
+
+		return dict
+
+	def applyModifier(self, dict):
+		if "HEALTH" in dict and "DEFENSE" in dict:
+			self.data["ENERGY"] -= (dict["DEFENSE"]/2)
+
+		super().applyModifier(dict)
 
 	def doPlayerAnim(self, action="IDLE", blend=10):
 		if self.ANIMOBJ == None or self.data["HEALTH"] <= 0:
@@ -646,9 +742,26 @@ class Ahsoka(characters.TRPlayer):
 				self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
 			self.lastaction = [action, 0]
 
-		elif action == "FORWARD" and self.data["WPDATA"]["ACTIVE"] == "ACTIVE":
-			self.doAnim(NAME=self.ANIMSET+"MeleeRunning", FRAME=(0,39), PRIORITY=3, MODE="LOOP", BLEND=blend)
-			setframe = 39
+		elif action == "BLOCK":
+			self.doAnim(NAME=self.ANIMSET+"MeleeBlock", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			self.lastaction = [action, 0]
+
+		elif self.data["WPDATA"]["ACTIVE"] == "ACTIVE":
+			if action == "FORWARD":
+				self.doAnim(NAME=self.ANIMSET+"MeleeRunning", FRAME=(0,39), PRIORITY=3, MODE="LOOP", BLEND=blend)
+				setframe = 39
+
+			elif action == "STRAFE_L":
+				self.doAnim(NAME=self.ANIMSET+"MeleeStrafeL", FRAME=(0,39), PRIORITY=3, MODE="LOOP", BLEND=blend)
+				setframe = 39
+
+			elif action == "STRAFE_R":
+				self.doAnim(NAME=self.ANIMSET+"MeleeStrafeR", FRAME=(0,39), PRIORITY=3, MODE="LOOP", BLEND=blend)
+				setframe = 39
+
+			else:
+				super().doPlayerAnim(action, blend)
+				return
 
 			if self.lastaction[0] != action:
 				self.lastaction[0] = action
@@ -665,7 +778,9 @@ class Ahsoka(characters.TRPlayer):
 
 		move = self.motion["Move"].normalized()
 
-		if self.data["RUN"] == False or self.motion["Move"].length <= 0.7 or self.data["SPEED"] <= 0:
+		if self.data["ATTACKCHAIN"] == "BLOCK":
+			mx = 0.05
+		elif self.data["RUN"] == False or self.motion["Move"].length <= 0.7 or self.data["SPEED"] <= 0:
 			mx = 0.035
 		else:
 			mx = self.data["SPEED"]
@@ -678,17 +793,21 @@ class Ahsoka(characters.TRPlayer):
 		linLV[2] = 0
 		action = "IDLE"
 
-		if linLV.length > 0.1 and self.data["ATTACKCHAIN"].split("_")[0] != "STAND":
-			action = "FORWARD"
+		if self.data["ATTACKCHAIN"] == "BLOCK":
+			action = "BLOCK"
 
-			if linLV[1] < 0:
+		elif linLV.length > 0.1 and self.data["ATTACKCHAIN"].split("_")[0] != "STAND":
+			action = "FORWARD"
+			lv = linLV.normalized()
+
+			if lv < 0:
 				action = "BACKWARD"
-			if linLV[0] > 0.5 and abs(linLV[1]) < 0.5:
+			if lv[0] > 0 and abs(lv[1]) < 0.7:
 				action = "STRAFE_R"
-			if linLV[0] < -0.5 and abs(linLV[1]) < 0.5:
+			if lv[0] < 0 and abs(lv[1]) < 0.7:
 				action = "STRAFE_L"
 
-			if linLV.length <= (0.05*60):
+			if linLV.length <= (0.04*60):
 				action = "WALK_"+action
 
 		self.doPlayerAnim(action, blend=10)
@@ -732,6 +851,17 @@ class Ahsoka(characters.TRPlayer):
 				#else:
 					#
 
+			elif self.data["ATTACKCHAIN"] == "BLOCK":
+				self.addModifier(SHIELD=self.data["ENERGY"])
+				if keymap.BINDS["ATTACK_TWO"].active() == False:
+					self.data["ATTACKCHAIN"] = "NONE"
+
+			elif keymap.BINDS["ATTACK_TWO"].active() == True:
+				self.doAnim(STOP=True, LAYER=0)
+				self.doAnim(STOP=True, LAYER=1)
+				self.data["COOLDOWN"] = 0
+				self.data["ATTACKCHAIN"] = "BLOCK"
+
 			elif move.length > 0.01:
 				if move[1] > 0.01 and abs(move[0]) <= 0.01:
 					if keymap.BINDS["ATTACK_ONE"].tap() == True:
@@ -744,7 +874,7 @@ class Ahsoka(characters.TRPlayer):
 					self.doAnim(NAME=anim, FRAME=(0,50), LAYER=0, PRIORITY=2, BLEND=10)
 					self.data["COOLDOWN"] = 50
 					self.data["ATTACKCHAIN"] = "STAND_ONE"
-				if keymap.BINDS["ATTACK_TWO"].tap() == True:
+				if keymap.BINDS["ALTACT"].tap() == True:
 					self.doAnim(NAME=anim+"3", FRAME=(0,60), LAYER=1, PRIORITY=0, BLEND=0)
 					self.data["COOLDOWN"] = 60
 					self.data["ATTACKCHAIN"] = "STAND_SPIN"
@@ -831,18 +961,42 @@ class Ahsoka(characters.TRPlayer):
 				weap["ACTIVE"] = "ACTIVE"
 
 
-class LaserGun(objects.ZephyrPlayerWeapon):
+class LaserGun(weapon.CorePlayerWeapon):
 
 	NAME = "Yup, its a gun -_-"
 	SLOTS = ["Shoulder_R", "Shoulder_L"]
 	TYPE = "RANGED"
 	HAND = "MAIN"
 	WAIT = 40
+	SCALE = 1.0
+	OFFSET = (0, -0.22, -0.06)
 
 	def defaultData(self):
+		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["ROCKETS"] = 1
+		dict["STRAFE"] = None
+
 		return dict
+
+	def PS_HandSocket(self):
+		super().PS_HandSocket()
+
+		if self.env_dim != None:
+			self.objects["Mesh"].color = self.env_dim
+			self.env_dim = None
+		else:
+			self.objects["Mesh"].color = (1,1,1,1)
+
+	def ST_Startup(self):
+		self.data["HUD"]["Text"] = "Rockets: "+str(self.data["ROCKETS"])
+		self.data["HUD"]["Stat"] = 100*(self.data["ROCKETS"]>0)
+
+	def ST_Idle(self):
+		if self.data["STRAFE"] != None:
+			self.owning_player.data["STRAFE"] = self.data["STRAFE"]
+			self.data["STRAFE"] = None
 
 	def ST_Active(self):
 		owner = self.owner
@@ -897,7 +1051,7 @@ class LaserGun(objects.ZephyrPlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 15
+				ammo["DAMAGE"] = 15.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, sy, sz)
 				ammo.color = (1,1,1,1)
@@ -913,6 +1067,10 @@ class LaserGun(objects.ZephyrPlayerWeapon):
 			self.data["COOLDOWN"] -= 1
 
 		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Rifle")
+
+		if self.data["STRAFE"] == None:
+			self.data["STRAFE"] = self.owning_player.data["STRAFE"]
+		self.owning_player.data["STRAFE"] = True
 
 		hrz = plrobj.getAxisVect((0,0,1))
 
@@ -955,6 +1113,7 @@ class Lightsaber(objects.BasicSword):
 		self.gfx_blade.localScale = (1,0,1)
 		if self.PS_ManageBlade not in self.active_post:
 			self.active_post.append(self.PS_ManageBlade)
+		self.env_dim = None
 
 	def ST_Startup(self):
 		self.addBlade()
@@ -979,6 +1138,12 @@ class Lightsaber(objects.BasicSword):
 			vis = self.objects["Mesh"].visible
 
 		blade.setVisible(vis, True)
+
+		if self.env_dim != None:
+			self.objects["Mesh"].color = self.env_dim
+			self.env_dim = None
+		else:
+			self.objects["Mesh"].color = (1,1,1,1)
 
 
 class LightsaberO(Lightsaber):

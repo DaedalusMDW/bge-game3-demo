@@ -7,40 +7,38 @@ from bge import logic
 from game3 import base, keymap, attachment, weapon, powerup, viewport
 
 
-class ZephyrPlayerWeapon(weapon.CorePlayerWeapon):
-
-	def defaultStates(self):
-		super().defaultStates()
-		self.env_dim = None
-		self.active_post.append(self.PS_SetVisible)
-
-	def PS_SetVisible(self):
-		if self.env_dim != None:
-			self.objects["Mesh"].color = self.env_dim
-			self.env_dim = None
-			return
-
-		cls = self.getParent()
-		amb = 0
-		if cls != None:
-			amb = cls.dict.get("DIM", amb)
-		self.objects["Mesh"].color = (amb+1, amb+1, amb+1, 1.0)
-
-
-class MachineGun(ZephyrPlayerWeapon):
+class MachineGun(weapon.CorePlayerWeapon):
 
 	NAME = "Basic SMG"
 	SLOTS = ["Shoulder_R", "Shoulder_L"]
 	TYPE = "RANGED"
 	HAND = "MAIN"
 	WAIT = 40
+	SCALE = 1.0
+	OFFSET = (0, -0.25, -0.05)
 
 	def defaultData(self):
+		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["MAG"] = 30
 		dict["STRAFE"] = None
 		dict["RELOAD"] = False
+
 		return dict
+
+	def PS_HandSocket(self):
+		super().PS_HandSocket()
+
+		if self.env_dim != None:
+			self.objects["Mesh"].color = self.env_dim
+			self.env_dim = None
+		else:
+			self.objects["Mesh"].color = (1,1,1,1)
+
+	def ST_Startup(self):
+		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
+		self.data["HUD"]["Stat"] = (self.data["MAG"]/30)*100
 
 	def ST_Idle(self):
 		if self.data["STRAFE"] != None:
@@ -89,16 +87,16 @@ class MachineGun(ZephyrPlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 1
+				ammo["DAMAGE"] = 1.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, 16+(rnd*4), sz)
-				ammo.color = (1,1,0,1)
+				ammo.color = (1.0, 0.8, 0.5, 1)
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
 				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
 				gfx.setParent(self.objects["Barrel"], False, False)
-				gfx.localScale = (0.5, 1.0, 0.5)
+				gfx.localScale = (1.0, 2.0, 1.0)
 				gfx.children[0].color = (1,1,0,1)
 
 				self.data["MAG"] -= 1
@@ -131,20 +129,38 @@ class MachineGun(ZephyrPlayerWeapon):
 			self.objects["Mesh"].localOrientation = self.createMatrix()
 
 
-class HandGun(ZephyrPlayerWeapon):
+class HandGun(weapon.CorePlayerWeapon):
 
 	NAME = "Basic Pistol"
 	SLOTS = ["Hip_R", "Hip_L"]
 	TYPE = "RANGED"
 	HAND = "MAIN"
 	WAIT = 20
+	SCALE = 0.7
+	OFFSET = (0, -0.08, -0.04)
 
 	def defaultData(self):
+		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["MAG"] = 8
 		dict["STRAFE"] = None
 		dict["RELOAD"] = False
+
 		return dict
+
+	def PS_HandSocket(self):
+		super().PS_HandSocket()
+
+		if self.env_dim != None:
+			self.objects["Mesh"].color = self.env_dim
+			self.env_dim = None
+		else:
+			self.objects["Mesh"].color = (1,1,1,1)
+
+	def ST_Startup(self):
+		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
+		self.data["HUD"]["Stat"] = (self.data["MAG"]/8)*100
 
 	def ST_Active(self):
 		owner = self.owner
@@ -194,16 +210,16 @@ class HandGun(ZephyrPlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 4
+				ammo["DAMAGE"] = 4.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, 16+(rnd*4), sz)
-				ammo.color = (1,1,0,1)
+				ammo.color = (1.0, 0.8, 0.5, 1)
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
 				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
 				gfx.setParent(self.objects["Barrel"], False, False)
-				gfx.localScale = (0.5, 0.5, 0.5)
+				gfx.localScale = (1.0, 1.0, 1.0)
 				gfx.children[0].color = (1,1,0,1)
 
 				self.data["MAG"] -= 1
@@ -249,17 +265,19 @@ class HandGun(ZephyrPlayerWeapon):
 			self.objects["Mesh"].localOrientation = self.createMatrix()
 
 
-class BasicSword(ZephyrPlayerWeapon):
+class BasicSword(weapon.CorePlayerWeapon):
 
 	NAME = "Pirate Sword"
 	SLOTS = ["Hip_L", "Hip_R"]
 	TYPE = "MELEE"
-	OFFSET = (0, 0.2, 0.15)
-	SCALE = 1
+	OFFSET = (0, 0.025, -0.325)
+	SCALE = 1.0
 	BLADELENGTH = 1
 
 	def defaultData(self):
 		self.hitlist = []
+		self.env_dim = None
+
 		dict = super().defaultData()
 		return dict
 
@@ -267,8 +285,10 @@ class BasicSword(ZephyrPlayerWeapon):
 		plr = self.owning_player
 
 		if self.getFirstEvent("WP_FIRE") != None:
-			rfm = self.objects["Blade"].worldPosition
-			rto = rfm+self.objects["Blade"].getAxisVect([0,0,1])
+			obj = self.objects.get("Blade", self.owner)
+			rfm = obj.worldPosition
+			rto = rfm+obj.getAxisVect((0,0,1))
+
 			rayOBJ, rayPNT, rayNRM = plr.getOwner().rayCast(rto, rfm, self.BLADELENGTH, "", 1, 1, 0)
 
 			if rayOBJ != None and rayOBJ not in self.hitlist:

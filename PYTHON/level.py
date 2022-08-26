@@ -5,7 +5,7 @@
 import math
 import mathutils
 
-from bge import logic, events, render, types
+from bge import logic, events, render, types, constraints
 
 from game3 import GAMEPATH, keymap, settings, config, base, player, viewport, world
 
@@ -22,6 +22,13 @@ def INIT(cont):
 	status = base.GAME(cont)
 
 	if status == "DONE":
+		if owner.get("DIM", False) == True:
+			for cls in logic.UPDATELIST:
+				if hasattr(cls, "env_dim") == True:
+					r = owner.color[0]
+					g = owner.color[1]
+					b = owner.color[2]
+					cls.env_dim = (r+1, g+1, b+1, 1)
 		name = base.WORLD["PLAYERS"].get("1", None)
 
 		if name != None:
@@ -90,16 +97,17 @@ def JUMPPAD(cont):
 
 	plr = owner.get("RAYFOOT", None)
 
-	force = [
-		owner.get("X", 0),
-		owner.get("Y", 0),
-		owner.get("Z", 0)]
+	x = owner.get("X", 0)
+	y = owner.get("Y", 0)
+	z = owner.get("Z", 0)
+
+	vec = mathutils.Vector((x,y,z))
 
 	if plr != None:
 		root = plr.objects.get("Root", None)
 		if root != None:
 			plr.jump_state = "JUMP"
-			root.worldLinearVelocity = owner.worldOrientation*plr.createVector(vec=force)
+			root.worldLinearVelocity = owner.worldOrientation*vec
 
 	owner["RAYFOOT"] = None
 
@@ -211,6 +219,10 @@ def SMOKE(cont):
 
 	owner.localScale = (s[0]+r, s[1]+r, s[2]+r)
 	owner.color[0] = 1-x
+	if "RC" not in owner:
+		c = round(logic.getRandomFloat(), 2)
+		owner.color[1] = c
+		owner["RC"] = c
 
 	if "MOVE" in owner:
 		owner.worldPosition += owner["MOVE"]
@@ -482,15 +494,14 @@ def LIGHTLOD(cont):
 			wp = child.worldPosition+base.ORIGIN_OFFSET
 			wo = child.worldOrientation.copy()
 			dc = {"Z_SC":z_sc, "Z":zoff, "D_SC":1.0}
-			if owner.get("color", False) == True:
-				dc["color"] = (owner.color[0], owner.color[1], owner.color[2])
-			for key in child.getPropertyNames():
-				if key == "Efac":
-					dc["BUFFER"] = [1.0]*int(child.get("SPEED", 1))
-				if key == "color":
-					dc["color"] = (child.color[0], child.color[1], child.color[2])
-				else:
-					dc[key] = child[key]
+			for obj in [owner, child]:
+				for key in obj.getPropertyNames():
+					if key == "Efac":
+						dc["BUFFER"] = [1.0]*int(obj.get("SPEED", 1))
+					if key == "color":
+						dc["color"] = (obj.color[0], obj.color[1], obj.color[2])
+					else:
+						dc[key] = obj[key]
 			wp[2] *= dc["Z_SC"]
 			box.append([wp, wo, owner, dc])
 			if owner.get("CHILD", False) == False:
@@ -509,7 +520,7 @@ def LIGHTLOD(cont):
 				split = obj.name.split(".")
 				if len(split) == 3 and split[0] == name and split[1] == "Light":
 					nlgt.append(obj)
-					for i in ["energy", "distance", "spotsize", "spotblend", "color"]:
+					for i in ["energy", "distance", "color", "spotblend", "spotsize"]:
 						owner[i] = owner.get(i, getattr(obj, i, None))
 
 		owner["NAME"] = name
@@ -524,8 +535,8 @@ def LIGHTLOD(cont):
 
 	if owner.get("CO", None) == None:
 		owner["CO"] = co
-	elif (co-owner["CO"]).length < owner.get("D", 2):
-		return
+	#elif (co-owner["CO"]).length < owner.get("D", 2):
+	#	return
 	else:
 		owner["CO"] = co
 
@@ -536,18 +547,19 @@ def LIGHTLOD(cont):
 	box.sort(key=lambda x: (x[0]-mathutils.Vector((co[0],co[1],co[2]*x[3]["Z_SC"]))).length*x[3]["D_SC"] )
 
 	for i in range(len(nlgt)):
+		obj = nlgt[i]
 		if i >= len(box):
-			nlgt[i].visible = False
+			obj.visible = False
 			continue
 
-		nlgt[i].visible = True
+		obj.visible = True
 		dc = box[i][3]
 		wp = box[i][0].copy()
 		wo = box[i][1].copy()
 		wp[2] *= 1/dc["Z_SC"]
 		wp[2] += dc["Z"]
-		nlgt[i].worldPosition = wp-base.ORIGIN_OFFSET
-		nlgt[i].worldOrientation = wo
+		obj.worldPosition = wp-base.ORIGIN_OFFSET
+		obj.worldOrientation = wo
 
 		a = "energy"
 		v = dc.get(a, owner.get(a, None))
@@ -564,12 +576,119 @@ def LIGHTLOD(cont):
 			v = ((R*E)+(1-E))*v
 
 		if v != None:
-			setattr(nlgt[i], a, v)
+			setattr(obj, a, v)
 
-		for a in ["distance", "spotsize", "spotblend", "color"]:
+		if getattr(obj, "useShadow", False) == False:
+			a = "spotsize"
 			v = dc.get(a, owner.get(a, None))
 			if v != None:
-				setattr(nlgt[i], a, v)
+				setattr(obj, a, v)
+
+		for a in ["distance", "color", "spotblend"]:
+			v = dc.get(a, owner.get(a, None))
+			if v != None:
+				setattr(obj, a, v)
+
+
+# Copy Armature to Physics (UPBGE020 only)
+def RAGDOLL(cont):
+	owner = cont.owner
+	if "DESTROY" in owner:
+		owner.endObject()
+		return
+
+	if owner.get("Class", None) == None:
+		return
+
+	plr = owner["Class"]
+	if owner.isSuspendDynamics == False and plr.motion["World"].length > 0.1:
+		print("RD IMP", plr.motion["World"])
+		owner.worldLinearVelocity = plr.motion["World"]
+		plr.motion["World"] = mathutils.Vector((0,0,0))
+		plr.motion["Local"] = mathutils.Vector((0,0,0))
+
+
+# Apply Constraint (UPBGE020 only)
+def ADDCONSTRAINT(cont):
+	owner = cont.owner
+
+	if "_CONSTRAINT" in owner:
+		if "DESTROY" in owner:
+			constraints.removeConstraint(owner["_CONSTRAINT"].constraint_id)
+			del owner["_CONSTRAINT"]
+			owner["POSE_CON"].active = False
+			owner["POSE_CON"].target = owner.scene.objectsInactive[owner.name]
+			#owner.visible = True
+			owner.endObject()
+			return
+
+		if "POSE_ORI" in owner:
+			owner.worldOrientation = owner["POSE_ORI"]
+			del owner["POSE_ORI"]
+		if "POSE_POS" in owner:
+			owner.worldPosition = owner["POSE_POS"]
+			del owner["POSE_POS"]
+		if "POSE_CON" in owner:
+			if owner["POSE_CON"].active != True:
+				owner["POSE_CON"].active = True
+			#del owner["POSE_CON"]
+		return
+
+	if "DESTROY" in owner:
+		return
+
+	parent = owner.get("TARGET", None)
+	ctype = owner.get("TYPE", "6DOF")
+	joint = owner.children.get(owner.name+".Joint")
+
+	if parent == None:
+		#owner.endObject()
+		return
+
+	#owner.removeParent()
+	for obj in [owner, parent]:
+		obj.worldLinearVelocity = (0,0,0)
+		obj.worldAngularVelocity = (0,0,0)
+		obj.restoreDynamics()
+		obj.enableRigidBody()
+
+	objA = owner.getPhysicsId()
+	objB = parent.getPhysicsId()
+	ct = constraints.GENERIC_6DOF_CONSTRAINT
+	if ctype == "HINGE":
+		ct = constraints.LINEHINGE_CONSTRAINT
+	if ctype == "BALL":
+		ct = constraints.POINTTOPOINT_CONSTRAINT
+	PX, PY, PZ = joint.localPosition
+	AX, AY, AZ = joint.localOrientation.to_euler("XYZ")
+	owner["_CONSTRAINT"] = constraints.createConstraint(objA, objB, ct, PX, PY, PZ, AX, AY, AZ, 128)
+
+	pos = ["minPX", "maxPX", "minPY", "maxPY", "minPZ", "maxPZ"]
+	rot = ["minAX", "maxAX", "minAY", "maxAY", "minAZ", "maxAZ"]
+
+	for prop in pos+rot:
+		joint[prop] = joint.get(prop, 0)
+
+	if ctype == "BALL":
+		return
+
+	if ctype == "HINGE":
+		min = math.radians(joint["minAX"])
+		max = math.radians(joint["maxAX"])
+		owner["_CONSTRAINT"].setParam(3, min, max)
+		return
+
+	param = ["AX", "AY", "AZ"]
+	if ctype == "6DOF":
+		param = param+["PX", "PY", "PZ"]
+
+	for prop in param:
+		axis = ["X", "Y", "Z"].index(prop[1])
+		if prop[0] == "A":
+			axis += 3
+		min = math.radians(joint["min"+prop])
+		max = math.radians(joint["max"+prop])
+		owner["_CONSTRAINT"].setParam(axis, min, max)
 
 
 # Define Camera Path

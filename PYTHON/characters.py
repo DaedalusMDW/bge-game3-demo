@@ -14,32 +14,340 @@ class ActorPlayer(player.CorePlayer):
 
 	def defaultData(self):
 		self.env_dim = None
+		self.npc_leader = None
+		self.npc_state = 0
+		self.ragdollparts = None
+		self.ragdollstate = "INIT"
 
 		dict = super().defaultData()
 		dict["COOLDOWN"] = 0
+		dict["NPC_LEAD"] = False
+		dict["RAGDOLL"] = False
+
 		return dict
 
-	def applyContainerProps(self, cls):
-		cls.gravity = self.gravity.copy()
-		cls.air_drag = cls.gravity.length/9.8
-		cls.env_dim = self.objects["Mesh"].color
+	def switchPlayerNPC(self):
+		if self.active_state != self.ST_IdleRD:
+			super().switchPlayerNPC()
+		elif self.active_state != self.ST_Ragdoll:
+			super().switchPlayerNPC()
+
+	def applyModifier(self, dict):
+		if "IMPULSE" in dict:
+			self.jump_state = "JUMP"
+
+		super().applyModifier(dict)
+
+	def destroy(self):
+		if self.ragdollparts != None:
+			for name in self.ragdollparts:
+				obj = self.ragdollparts[name]
+				obj["DESTROY"] = True
+
+		self.ragdollparts = None
+		self.ragdollstate = "INIT"
+
+		if self.objects["Root"] == None and self.owner.parent != None:
+			self.owner.removeParent()
+
+		super().destroy()
+
+	def hideObject(self, state=None):
+		if self.dict.get("Vehicle", None) == None:
+			super().hideObject(state)
+
+	def manageStatAttr(self):
+		if self.active_state in {self.ST_Ragdoll, self.ST_IdleRD}:
+			return
+
+		if self.data["HEALTH"] < 0 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
+			self.data["HEALTH"] = -1
+			if self.objects["Root"] != None:
+				self.motion["World"] = self.objects["Root"].worldLinearVelocity.copy()
+			else:
+				self.motion["World"] = self.createVector()
+
+			if self.data["NPC_LEAD"] == True:
+				self.removeContainerParent()
+				self.npc_leader = None
+				self.data["NPC_LEAD"] = False
+
+			print("RD WV", self.motion["World"])
+			self.active_state = self.ST_Ragdoll
+
+		super().manageStatAttr()
 
 	def PS_SetVisible(self):
 		super().PS_SetVisible()
 
-		if self.env_dim != None:
-			self.objects["Mesh"].color = self.env_dim
-			self.env_dim = None
-			return
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
 
-		cls = self.getParent()
-		amb = 0
-		if cls != None:
-			amb = cls.dict.get("DIM", amb)
-		self.objects["Mesh"].color = (amb+1, amb+1, amb+1, 1.0)
+		self.objects["Mesh"].color = self.env_dim
+
+		for cls in self.getChildren():
+			cls.env_dim = self.env_dim
+
+		self.env_dim = None
+
+	def ST_IdleRD(self):
+		self.ST_Ragdoll()
+
+		char = self.owner
+
+		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
+			self.npc_leader = self.getParent()
+
+		if self.npc_leader != None:
+			plr = self.npc_leader.owner
+			pos = char.worldPosition-plr.worldPosition
+			pos = plr.worldOrientation.inverted()*pos
+
+			evt = self.getFirstEvent("INTERACT", "ACTOR")
+
+			if evt != None and self.npc_state >= 0:
+				self.npc_state += 1
+
+			if self.npc_state > 30:
+				self.npc_state = -2
+				for name in self.ragdollparts:
+					obj = self.ragdollparts[name]
+					obj["DESTROY"] = True
+				self.ragdollparts = None
+				self.ragdollstate = "INIT"
+				self.switchPlayerNPC()
+				return
+			elif evt == None:
+				if self.npc_state >= 1:
+					self.npc_state = -1
+				else:
+					self.npc_state = 0
+
+		else:
+			plr = None
+			pos = self.createVector()
+
+		for name in self.ragdollparts:
+			obj = self.ragdollparts[name]
+			if plr != None:
+				vec = obj.worldPosition-plr.worldPosition
+				vec = plr.worldOrientation.inverted()*vec
+				z = (0.5-vec[2])*obj.mass*2
+				zref = self.createVector(vec=(0,0,z))
+				vec[2] = 0
+				if name == "root":
+					mx = (vec.length-2.0)*obj.mass*4
+					if mx < 0:
+						mx = 0
+					zref = zref+(vec.normalized()*-mx)
+				if name == "head":
+					mx = (vec.length-1.0)*obj.mass*4
+					if mx < 0:
+						mx = 0
+					zref = zref+(vec.normalized()*-mx)
+				zref = plr.worldOrientation*zref
+				obj.applyForce(zref, False)
+				if name == "root":
+					up = self.gravity.normalized()
+					tx = up.dot(obj.getAxisVect((0,0,-1)))
+					gz = up.dot(obj.getAxisVect((0,-1,0)))
+					if gz < 0:
+						tx = 1-(2*(tx<0))
+
+					obj.applyTorque((tx*obj.mass*1, 0, 0), True)
+
+			obj.applyForce(-obj.worldLinearVelocity*obj.mass, False)
+			obj.applyForce(-self.owner.scene.gravity*obj.mass, False)
+
+	def ST_Idle(self):
+		scene = base.SC_SCN
+		owner = self.objects["Root"]
+		char = self.owner
+
+		self.gposoffset = owner.getAxisVect((0,0,1))*self.GND_H
+		ground, angle = self.checkGround()
+
+		owner.setDamping(0, 0)
+
+		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
+			self.npc_leader = self.getParent()
+
+		if self.npc_leader != None:
+			plr = self.npc_leader.owner
+			vec = plr.worldPosition-char.worldPosition
+			vref = vec.normalized()
+
+			mx = (vec.length-1.5)/20
+			if abs(vec.length-1.5) < 0.5:
+				mx = 0
+			if mx < -0.035:
+				mx = -0.035
+			if mx > self.data["SPEED"]:
+				mx = self.data["SPEED"]
+
+			evt = self.getFirstEvent("INTERACT", "ACTOR")
+
+			if evt != None and self.npc_state >= 0:
+				self.npc_state += 1
+
+			if self.npc_state > 30:
+				self.npc_state = -2
+				self.active_state = self.ST_IdleRD
+				return
+			elif evt == None:
+				if self.npc_state >= 1:
+					self.npc_state = -1
+				else:
+					self.npc_state = 0
+
+			if self.npc_state == -1 or vec.length > 10 or self.getParent().dict.get("Vehicle", None) != None:
+				self.removeContainerParent()
+				self.npc_leader = None
+				self.npc_state = 0
+				self.data["NPC_LEAD"] = False
+
+		else:
+			vref = owner.getAxisVect((0,0,0))
+			mx = 0
+			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
+			if evt != None:
+				self.setContainerParent(evt.sender)
+				self.npc_leader = evt.sender
+				self.npc_state = -2
+				self.data["NPC_LEAD"] = True
+
+		if ground != None:
+			if self.jump_state != "NONE":
+				self.jump_timer = 0
+				self.jump_state = "NONE"
+				vel = self.motion["World"]*(1/60)
+				self.resetAcceleration(vel)
+				self.doPlayerAnim("LAND")
+
+			owner.worldLinearVelocity = (0,0,0)
+
+			self.doMovement(vref, mx)
+			self.doMoveAlign(axis=vref, up=False)
+
+			linLV = self.motion["Local"].copy()
+			linLV[2] = 0
+			action = "IDLE"
+
+			if linLV.length > 0.01:
+				action = "FORWARD"
+
+				if linLV[1] < 0:
+					action = "BACKWARD"
+				if linLV[0] > 0.5 and abs(linLV[1]) < 0.5:
+					action = "STRAFE_R"
+				if linLV[0] < -0.5 and abs(linLV[1]) < 0.5:
+					action = "STRAFE_L"
+
+				if linLV.length <= (0.05*60):
+					action = "WALK_"+action
+
+			self.doPlayerAnim(action, blend=10)
+
+		elif self.jump_state == "NONE":
+			self.doJump(height=1, move=0.5)
+
+		else:
+			self.jump_state = "FALLING"
+			self.jump_timer += 1
+
+			axis = owner.worldLinearVelocity*(1/60)*0.1
+			self.doMoveAlign(axis, up=False, margin=0.001)
+			self.doPlayerAnim("FALLING")
+
+			owner.applyForce(vref*5, False)
+
+		self.alignToGravity()
 
 	def ST_Freeze(self):
-		self.objects["Mesh"].color = (1,1,1,1)
+		if self.active_state == self.ST_IdleRD:
+			self.ST_IdleRD()
+		elif self.active_state == self.ST_Ragdoll:
+			self.ST_Ragdoll()
+		self.PS_SetVisible()
+
+	def ST_Ragdoll(self):
+		scene = self.owner.scene
+		char = self.owner
+		rig = self.objects["Rig"]
+
+		if self.ragdollparts == None:
+			self.resetGroundRay()
+			self.resetAcceleration()
+			self.removePhysicsBox()
+
+			self.ragdollparts = {}
+			newobj = scene.addObject("Ragdoll"+char.name, char, 0)
+
+			rdroot = newobj.children[newobj.name+".root"]
+			rdroot["Class"] = self
+
+			rdroot.removeParent()
+			rdroot.worldLinearVelocity = (0,0,0)
+			rdroot.worldAngularVelocity = (0,0,0)
+			rdroot.suspendDynamics()
+
+			rdroot.worldPosition = self.objects["RagdollHelper"].worldPosition.copy()
+			rdroot.worldOrientation = self.objects["RagdollHelper"].worldOrientation.copy()
+
+			for obj in list(rdroot.childrenRecursive):
+				name = obj.name.split(".")
+				if len(name) == 2:
+					print(name[1], obj.parent)
+					obj["Class"] = self
+					obj["TARGET"] = obj.parent
+					obj.removeParent()
+					obj.worldLinearVelocity = (0,0,0)
+					obj.worldAngularVelocity = (0,0,0)
+					obj.suspendDynamics()
+					self.ragdollparts[name[1]] = obj
+
+			char.setParent(rdroot, False, False)
+
+			for bone in rig.channels:
+				if bone.name in self.ragdollparts:
+					obj = self.ragdollparts[bone.name]
+					jnt = obj.children[obj.name+".Joint"]
+
+					bp = self.getWorldSpace(rig, bone.pose_head)
+					br = self.getWorldRotation(rig, bone.pose_matrix.to_3x3())
+
+					br = obj.worldOrientation.inverted()*br
+					br = br*jnt.localOrientation.inverted()
+
+					obj["POSE_ORI"] = obj.worldOrientation*br
+					obj["POSE_POS"] = bp + (obj.worldOrientation*-jnt.localPosition)
+
+					obj["POSE_CON"] = rig.constraints[bone.name+":"+bone.name]
+					obj["POSE_CON"].target = jnt
+					#obj["POSE_CON"].active = True
+
+			self.ragdollparts["root"] = rdroot
+			self.ragdollstate = "ACTIVE"
+			newobj.endObject()
+
+		if base.ORIGIN_SHIFT != None:
+			self.ragdollstate = "ORIGIN"
+			for name in self.ragdollparts:
+				obj = self.ragdollparts[name]
+				obj.disableRigidBody()
+				obj.suspendDynamics()
+		elif self.ragdollstate == "ORIGIN":
+			self.ragdollstate = "ACTIVE"
+			for name in self.ragdollparts:
+				obj = self.ragdollparts[name]
+				obj.restoreDynamics()
+				obj.enableRigidBody()
+
+		self.doAnim(MODE="LOOP", BLEND=0)
 
 	def weaponLoop(self):
 		cls = self.active_weapon
@@ -51,6 +359,15 @@ class ActorPlayer(player.CorePlayer):
 
 		## RANGED ##
 		if self.data["WPDATA"]["CURRENT"] == "RANGED":
+			#vec = viewport.getRayVec()
+			#hrz = self.owner.getAxisVect([0,0,1])
+			#ang = self.toDeg(vec.angle(hrz))/180
+
+			#hand = cls.data["HAND"].split("_")[1]
+			#anim = "Ranged"+evt.getProp("TYPE")+"Aim"+hand
+			#self.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
+			#self.doAnim(LAYER=1, SET=ang*20)
+
 			if keymap.BINDS["ATTACK_ONE"].tap() == True:
 				self.sendEvent("WP_FIRE", cls, "PRIMARY", "TAP")
 			elif keymap.BINDS["ATTACK_ONE"].active() == True:
@@ -96,6 +413,7 @@ class TRPlayer(ActorPlayer):
 
 		dict = super().defaultData()
 		dict["WALLJUMPS"] = 0
+
 		return dict
 
 	def defaultStates(self):
@@ -147,6 +465,9 @@ class TRPlayer(ActorPlayer):
 
 	def PS_Edge(self):
 		owner = self.objects["Root"]
+		if owner == None:
+			return
+
 		rayup = self.getWorldSpace(owner, self.wallrayup)
 		rayto = self.getWorldSpace(owner, self.wallrayto)
 
