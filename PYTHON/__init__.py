@@ -5,11 +5,11 @@ from game3 import config, input, keymap
 # blends with lights should be at the top, since lights only affect all loaded after.
 
 config.LIBRARIES = [
+	"CommonAssets",
+	"DemoContent",
 	"Zephyr",
 	"StarWars",
-	"CommonAssets"	# Pro-Tip: put blends that are integral at the bottom,
-			#          that way you can comment "addons" without needing
-			#          to bother with the comma at the end :)
+	#"Stargate",
 ]
 
 config.LIBLOAD_TYPE = "NORMAL"
