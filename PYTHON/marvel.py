@@ -289,7 +289,7 @@ class QuinJet(vehicle.CoreAircraft):
 	LANDACTION = "QJLand"
 	LANDFRAMES = [100, 0]
 
-	INVENTORY = {"Gun_L":"WP_ZCannon", "Gun_R":"WP_ZCannon", "Missile_L":"WP_ZMissile", "Missile_R":"WP_ZMissile"}
+	INVENTORY = {"Gun":"WP_GatlingGun", "Missile_L":"WP_Missile", "Missile_R":"WP_Missile"}
 	SLOTS = {"ONE":"Gun", "TWO":"Missile"}
 
 	CAM_RANGE = (20, 36)
@@ -531,17 +531,22 @@ class QuinJet(vehicle.CoreAircraft):
 					owner.applyForce([0,0,self.gravity.length*owner.mass*-0.5], True)
 
 		## WEAPONS ##
-		for slot in self.data["SLOTS"]:
-			for side in ["_L", "_R"]:
-				key = self.data["SLOTS"][slot]
-				cls = self.getSlotChild(slot+side)
-				if cls != None:
-					#if keymap.BINDS[key].tap() == True:
-					cls.stateSwitch(True)
-					if slot == "Gun" and keymap.BINDS["ATTACK_ONE"].active() == True:
-						self.sendEvent("WP_FIRE", cls)
-					if slot == "Missile" and keymap.BINDS["ATTACK_TWO"].active() == True:
-						self.sendEvent("WP_FIRE", cls, "TAP")
+		if keymap.BINDS["ATTACK_ONE"].active() == True:
+			cls = self.getSlotChild("Gun")
+			if cls != None:
+				cls.stateSwitch(True)
+				self.sendEvent("WP_FIRE", cls)
+
+		if keymap.BINDS["ATTACK_TWO"].active() == True:
+			cls = self.getSlotChild("Missile_L")
+			if cls != None:
+				cls.stateSwitch(True)
+				self.sendEvent("WP_FIRE", cls, "TAP")
+
+			cls = self.getSlotChild("Missile_R")
+			if cls != None:
+				cls.stateSwitch(True)
+				self.sendEvent("WP_FIRE", cls, "TAP")
 
 		## EXTRAS ##
 		owner.addDebugProperty("X", True)
@@ -664,6 +669,67 @@ class QuinJet(vehicle.CoreAircraft):
 			owner.localPosition = ref[0].lerp(pos[0], fac)
 			owner.localOrientation = (ref[1].to_quaternion().slerp(pos[1].to_quaternion(), fac)).to_matrix()
 			self.data["DOCKED"] -= 1
+
+
+class GatlingGun(weapon.CoreWeapon):
+
+	NAME = "brrt"
+	TYPE = "RANGED"
+
+	def defaultData(self):
+		dict = super().defaultData()
+
+		dict["SPIN"] = 0
+
+		return dict
+
+	def ST_Active(self):
+		owner = self.objects["Root"]
+		barrel = self.objects["Barrel"]
+
+		fire = self.getFirstEvent("WP_FIRE")
+
+		if fire != None:
+			self.data["SPIN"] += 1
+			if self.data["SPIN"] > 50:
+				self.data["SPIN"] = 50
+		else:
+			self.data["SPIN"] -= 1
+			if self.data["SPIN"] < 0:
+				self.data["SPIN"] = 0
+
+		if self.data["COOLDOWN"] > 0:
+			self.data["COOLDOWN"] -= 1
+
+		elif self.data["SPIN"] >= 50 and fire != None:
+			plrobj = self.owning_player.objects["Root"]
+			sx, sy, sz = fire.getProp("SCALE", [1, 1, 1])
+			rnd = logic.getRandomFloat()
+			rndx = (logic.getRandomFloat()-0.5)*0.07
+			rndy = (logic.getRandomFloat()-0.5)*0.07
+			rvec = self.owner.getAxisVect((rndx,5,rndy)).normalized()
+
+			ammo = owner.scene.addObject("AMMO_Bullet", barrel, 50)
+			ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
+			ammo.alignAxisToVect(rvec, 1, 1.0)
+			ammo["ROOTOBJ"] = plrobj
+			ammo["DAMAGE"] = 0.5
+			ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
+			ammo.localScale = (sx, 32+ammo["LINV"].length, sz)
+			ammo.color = (1.0, 0.8, 0.5, 1)
+			ammo.children[0].localScale = (1, 0.2+(rnd*0.8), 1)
+			ammo.children[0].color = fire.getProp("COLOR", [1, 1, 0, 1])
+
+			gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", barrel, 0)
+			gfx.setParent(barrel, False, False)
+			gfx.localPosition = (0, 0.1, 0.1)
+			gfx.localScale = (sx*4, sx*8, sx*4)
+			gfx.children[0].color = (1,1,0,1)
+
+			self.data["COOLDOWN"] = 4
+
+		mat = self.createMatrix(rot=(0, self.data["SPIN"], 0), deg=True)
+		barrel.localOrientation *= mat
 
 
 class ZephyrCall(base.CoreObject):

@@ -34,7 +34,7 @@ def BULLET(cont):
 		gfx.children[0].color = owner.color
 
 		mods = obj.get("MODIFIERS", None)
-		v = obj.get("SHIELD", 100)
+		v = obj.get("SHIELD", 0)
 		if "Class" in obj:
 			v = 0
 		dmg = owner["DAMAGE"]
