@@ -352,6 +352,12 @@ class QuinJet(vehicle.CoreAircraft):
 		if linV.length > 30:
 			self.doDragForce((0.2,0,0.5))
 
+	def toggleWeapons(self, state):
+		for slot in ["Gun", "Missile_L", "Missile_R"]:
+			cls = self.getSlotChild(slot)
+			if cls != None:
+				cls.stateSwitch(state)
+
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]
 
@@ -397,6 +403,7 @@ class QuinJet(vehicle.CoreAircraft):
 			self.data["DOCKED"] = None
 			self.doAnim(NAME="QJHover", FRAME=(100,100), LAYER=2)
 			self.doAnim(NAME="QJGlass", FRAME=(0,0), LAYER=1)
+			self.toggleWeapons(True)
 			self.active_state = self.ST_Active
 
 		elif state == "ENTER":
@@ -408,6 +415,7 @@ class QuinJet(vehicle.CoreAircraft):
 			self.active_state = self.ST_Enter
 
 		elif state == "EXIT":
+			self.toggleWeapons(False)
 			self.data["GLASSFRAME"] = g
 			self.doAnim(NAME="QJGlass", FRAME=(g,120), LAYER=1)
 			self.active_state = self.ST_Exit
@@ -430,6 +438,7 @@ class QuinJet(vehicle.CoreAircraft):
 			self.active_state = self.ST_Cruise
 
 		elif state == "DOCK":
+			self.toggleWeapons(False)
 			self.doAnim(NAME="QJDock", FRAME=(0,120), LAYER=2, BLEND=10)
 			self.setPhysicsType("NONE")
 			self.owner.localLinearVelocity = [0,0,0]
@@ -481,6 +490,7 @@ class QuinJet(vehicle.CoreAircraft):
 		force = self.motion["Force"]
 		torque = self.motion["Torque"]
 		linV = owner.localLinearVelocity
+		exit = False
 
 		## FORCES ##
 		tqx = torque[0]*400
@@ -517,36 +527,34 @@ class QuinJet(vehicle.CoreAircraft):
 
 		if self.gravity.length > 0.1:
 			up = self.gravity.normalized()
+			tx = 0
 			ty = up.dot(owner.getAxisVect((-1,0,0)))
 			gz = up.dot(owner.getAxisVect((0,0,-1)))
 			if gz < 0:
 				ty = 1-(2*(ty<0))
 
-			owner.applyTorque((0, ty*owner.mass*20, 0), True)
-
 			if self.data["LANDSTATE"] == "LAND":
+				tx = up.dot(owner.getAxisVect((0,1,0)))
 				rayto = owner.worldPosition+self.gravity
 
 				if force[2] < 0.01 and owner.rayCastTo(rayto, 3, "GROUND") != None:
+					if linV.length < 10:
+						exit = True
 					owner.applyForce([0,0,self.gravity.length*owner.mass*-0.5], True)
+
+			owner.applyTorque((tx*owner.mass*20, ty*owner.mass*20, 0), True)
 
 		## WEAPONS ##
 		if keymap.BINDS["ATTACK_ONE"].active() == True:
 			cls = self.getSlotChild("Gun")
 			if cls != None:
-				cls.stateSwitch(True)
 				self.sendEvent("WP_FIRE", cls)
 
 		if keymap.BINDS["ATTACK_TWO"].active() == True:
-			cls = self.getSlotChild("Missile_L")
-			if cls != None:
-				cls.stateSwitch(True)
-				self.sendEvent("WP_FIRE", cls, "TAP")
-
-			cls = self.getSlotChild("Missile_R")
-			if cls != None:
-				cls.stateSwitch(True)
-				self.sendEvent("WP_FIRE", cls, "TAP")
+			for slot in ["Missile_L", "Missile_R"]:
+				cls = self.getSlotChild(slot)
+				if cls != None:
+					self.sendEvent("WP_FIRE", cls, "TAP")
 
 		## EXTRAS ##
 		owner.addDebugProperty("X", True)
@@ -590,17 +598,10 @@ class QuinJet(vehicle.CoreAircraft):
 					owner.localPosition = self.docking_point[0]
 					owner.localOrientation = self.docking_point[1]
 
-				for slot in self.data["SLOTS"]:
-					for side in ["_L", "_R"]:
-						key = self.data["SLOTS"][slot]
-						cls = self.getSlotChild(side+slot)
-						if cls != None:
-							cls.stateSwitch(False)
-
-		elif keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
+		elif keymap.BINDS["ENTERVEH"].tap() == True and exit == True:
 			self.stateSwitch("EXIT")
 
-		elif keymap.BINDS["TOGGLEMODE"].tap() == True:
+		elif keymap.BINDS["TOGGLEMODE"].tap() == True and self.data["LANDSTATE"] == "FLY":
 			self.stateSwitch("CRUISE")
 
 	def ST_Idle(self):
@@ -698,12 +699,15 @@ class GatlingGun(weapon.CoreWeapon):
 			if self.data["SPIN"] < 0:
 				self.data["SPIN"] = 0
 
+		mat = self.createMatrix(rot=(0, self.data["SPIN"], 0), deg=True)
+		barrel.localOrientation *= mat
+
 		if self.data["COOLDOWN"] > 0:
 			self.data["COOLDOWN"] -= 1
 
 		elif self.data["SPIN"] >= 50 and fire != None:
 			plrobj = self.owning_player.objects["Root"]
-			sx, sy, sz = fire.getProp("SCALE", [1, 1, 1])
+			sx, sy, sz = fire.getProp("SCALE", [1.5, 1.5, 1.5])
 			rnd = logic.getRandomFloat()
 			rndx = (logic.getRandomFloat()-0.5)*0.07
 			rndy = (logic.getRandomFloat()-0.5)*0.07
@@ -713,7 +717,7 @@ class GatlingGun(weapon.CoreWeapon):
 			ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 			ammo.alignAxisToVect(rvec, 1, 1.0)
 			ammo["ROOTOBJ"] = plrobj
-			ammo["DAMAGE"] = 0.5
+			ammo["DAMAGE"] = 4
 			ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 			ammo.localScale = (sx, 32+ammo["LINV"].length, sz)
 			ammo.color = (1.0, 0.8, 0.5, 1)
@@ -721,15 +725,12 @@ class GatlingGun(weapon.CoreWeapon):
 			ammo.children[0].color = fire.getProp("COLOR", [1, 1, 0, 1])
 
 			gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", barrel, 0)
+			gfx.worldPosition += self.owner.getAxisVect((0, 0.1, 0.1))
 			gfx.setParent(barrel, False, False)
-			gfx.localPosition = (0, 0.1, 0.1)
-			gfx.localScale = (sx*4, sx*8, sx*4)
+			gfx.localScale = (sx*2, sx*4, sx*2)
 			gfx.children[0].color = (1,1,0,1)
 
-			self.data["COOLDOWN"] = 4
-
-		mat = self.createMatrix(rot=(0, self.data["SPIN"], 0), deg=True)
-		barrel.localOrientation *= mat
+			self.data["COOLDOWN"] = 2
 
 
 class ZephyrCall(base.CoreObject):
