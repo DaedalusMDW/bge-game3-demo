@@ -47,10 +47,13 @@ class MachineGun(weapon.CorePlayerWeapon):
 
 	def ST_Active(self):
 		owner = self.owner
+		mesh = self.objects["Mesh"]
+		barrel = self.objects["Barrel"]
+
+		camera = base.SC_SCN.active_camera
 		plrobj = self.owning_player.objects["Root"]
+
 		vec = viewport.getRayVec()
-		#if self.owning_player.rayhit != None:
-		#	vec = (self.owning_player.rayhit[1]-owner.worldPosition).normalized()
 
 		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
 		self.data["HUD"]["Stat"] = (self.data["MAG"]/30)*100
@@ -78,13 +81,12 @@ class MachineGun(weapon.CorePlayerWeapon):
 			elif pri != None:
 				sx, sy, sz = pri.getProp("SCALE", [0.25, 0.25, 0.25])
 				rnd = logic.getRandomFloat()
-				rndx = (logic.getRandomFloat()-0.5)*0.1
-				rndy = (logic.getRandomFloat()-0.5)*0.1
+				rndx = (logic.getRandomFloat()-0.5)*0.05
+				rndy = (logic.getRandomFloat()-0.5)*0.05
 				rvec = self.objects["Barrel"].getAxisVect((rndx,5,rndy)).normalized()
-				#vec += self.objects["Barrel"].getAxisVect((rndx,0,rndy)).normalized()*0.1
 
-				ammo = base.SC_SCN.addObject("AMMO_Bullet", self.objects["Barrel"], 50)
-				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
+				ammo = base.SC_SCN.addObject("AMMO_Bullet", barrel, 50)
+				ammo.alignAxisToVect(ammo.getVectTo(camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
 				ammo["DAMAGE"] = 1.0
@@ -94,10 +96,15 @@ class MachineGun(weapon.CorePlayerWeapon):
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
-				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
-				gfx.setParent(self.objects["Barrel"], False, False)
+				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", barrel, 0)
+				gfx.setParent(barrel, False, False)
 				gfx.localScale = (1.0, 2.0, 1.0)
 				gfx.children[0].color = (1,1,0,1)
+
+				rndx = (logic.getRandomFloat()*2.0)-1.0
+				rndy = (logic.getRandomFloat()*1.0)-0.0
+				mesh.worldPosition -= barrel.getAxisVect((0, 0.04, 0))
+				mesh.localOrientation *= self.createMatrix(rot=(rndy, 0, rndx), deg=True)
 
 				self.data["MAG"] -= 1
 				self.data["COOLDOWN"] = 5
@@ -123,10 +130,12 @@ class MachineGun(weapon.CorePlayerWeapon):
 		fw = plrobj.getAxisVect((0,1,0))
 
 		if fw.dot(vec) > 0.5 and vec.length > 0.01:
-			self.objects["Mesh"].alignAxisToVect(vec.normalized(), 1, 1.0)
-			self.objects["Mesh"].alignAxisToVect(up, 0, 1.0)
+			mesh.localPosition *= 0.8
+			mesh.alignAxisToVect(vec.normalized(), 1, 0.2)
+			mesh.alignAxisToVect(up, 0, 0.2)
 		else:
-			self.objects["Mesh"].localOrientation = self.createMatrix()
+			mesh.localPosition = self.createVector()
+			mesh.localOrientation = self.createMatrix()
 
 
 class HandGun(weapon.CorePlayerWeapon):
@@ -164,10 +173,13 @@ class HandGun(weapon.CorePlayerWeapon):
 
 	def ST_Active(self):
 		owner = self.owner
+		mesh = self.objects["Mesh"]
+		barrel = self.objects["Barrel"]
+
+		camera = base.SC_SCN.active_camera
 		plrobj = self.owning_player.objects["Root"]
+
 		vec = viewport.getRayVec()
-		#if self.owning_player.rayhit != None:
-		#	vec = (self.owning_player.rayhit[1]-owner.worldPosition).normalized()
 
 		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
 		self.data["HUD"]["Stat"] = (self.data["MAG"]/8)*100
@@ -203,11 +215,10 @@ class HandGun(weapon.CorePlayerWeapon):
 				rnd = logic.getRandomFloat()
 				rndx = (logic.getRandomFloat()-0.5)*0.02
 				rndy = (logic.getRandomFloat()-0.5)*0.02
-				rvec = self.objects["Barrel"].getAxisVect((rndx,5,rndy)).normalized()
-				#vec += self.objects["Barrel"].getAxisVect((rndx,0,rndy)).normalized()*0.1
+				rvec = barrel.getAxisVect((rndx,5,rndy)).normalized()
 
-				ammo = base.SC_SCN.addObject("AMMO_Bullet", self.objects["Barrel"], 50)
-				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
+				ammo = base.SC_SCN.addObject("AMMO_Bullet", barrel, 50)
+				ammo.alignAxisToVect(ammo.getVectTo(camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
 				ammo["DAMAGE"] = 4.0
@@ -217,10 +228,13 @@ class HandGun(weapon.CorePlayerWeapon):
 				ammo.children[0].localScale = (1, 0.1+(rnd*0.9), 1)
 				ammo.children[0].color = pri.getProp("COLOR", [1, 1, 0, 1])
 
-				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.objects["Barrel"], 0)
-				gfx.setParent(self.objects["Barrel"], False, False)
+				gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", barrel, 0)
+				gfx.setParent(barrel, False, False)
 				gfx.localScale = (1.0, 1.0, 1.0)
 				gfx.children[0].color = (1,1,0,1)
+
+				mesh.worldPosition -= barrel.getAxisVect((0, 0.03, 0))
+				mesh.localOrientation *= self.createMatrix(rot=(20, 0, 0), deg=True)
 
 				self.data["MAG"] -= 1
 				self.data["COOLDOWN"] = 15
@@ -231,7 +245,8 @@ class HandGun(weapon.CorePlayerWeapon):
 		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Pistol")
 
 		if sec == None:
-			self.objects["Mesh"].localOrientation = self.createMatrix()
+			mesh.localPosition = self.createVector()
+			mesh.localOrientation = self.createMatrix()
 			if self.data["STRAFE"] != None:
 				self.owning_player.data["STRAFE"] = self.data["STRAFE"]
 				self.data["STRAFE"] = None
@@ -259,10 +274,12 @@ class HandGun(weapon.CorePlayerWeapon):
 		fw = plrobj.getAxisVect((0,1,0))
 
 		if fw.dot(vec) > 0.5 and vec.length > 0.01:
-			self.objects["Mesh"].alignAxisToVect(vec.normalized(), 1, 1.0)
-			self.objects["Mesh"].alignAxisToVect(up, 0, 1.0)
+			mesh.localPosition *= 0.8
+			mesh.alignAxisToVect(vec.normalized(), 1, 0.3)
+			mesh.alignAxisToVect(up, 0, 0.3)
 		else:
-			self.objects["Mesh"].localOrientation = self.createMatrix()
+			mesh.localPosition = self.createVector()
+			mesh.localOrientation = self.createMatrix()
 
 
 class BasicSword(weapon.CorePlayerWeapon):
