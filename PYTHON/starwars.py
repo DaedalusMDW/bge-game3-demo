@@ -704,7 +704,7 @@ class Ahsoka(characters.TRPlayer):
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
 	OFFSET = (0, 0.03, 0.16)
 	SPEED = 0.12
-	JUMP = 6
+	JUMP = 3
 	GND_H = 1.0
 	EYE_H = 1.535
 	EDGE_H = 1.93
@@ -716,11 +716,20 @@ class Ahsoka(characters.TRPlayer):
 	CAM_MIN = 0.3
 	EDGECLIMB_TIME = 90
 
+	def defaultStates(self):
+		super().defaultStates()
+		self.active_post.insert(0, self.PS_Abilities)
+
 	def defaultData(self):
 		dict = super().defaultData()
 		dict["ATTACKCHAIN"] = "NONE"
 
 		return dict
+
+	def runModifiers(self):
+		self.data["RECHARGE"] = 0.05
+
+		super().runModifiers()
 
 	def applyModifier(self, dict):
 		if "HEALTH" in dict and "DEFENSE" in dict:
@@ -818,6 +827,19 @@ class Ahsoka(characters.TRPlayer):
 		elif keymap.BINDS["PLR_DUCK"].active() == True:
 			self.doCrouch(True)
 
+	def PS_Abilities(self):
+		owner = self.objects["Root"]
+		if owner == None:
+			return
+
+		tx = 120
+		if self.jump_state == "A_JUMP" and self.gravity.length > 1:
+			if self.data["ENERGY"] > 5 and self.jump_timer < tx:
+				vec = self.gravity.normalized()
+				mx = (tx-self.jump_timer)/tx
+				owner.applyForce(-vec*mx*15, False)
+				self.data["ENERGY"] -= 0.2
+
 	def weaponLoop(self):
 		pri = self.getSlotChild("Hip_L")
 		sec = self.getSlotChild("Hip_R")
@@ -868,16 +890,17 @@ class Ahsoka(characters.TRPlayer):
 						self.doAnim(NAME=anim+"Fast", FRAME=(0,35), LAYER=1, PRIORITY=0, BLEND=0)
 						self.data["COOLDOWN"] = 35
 						self.data["ATTACKCHAIN"] = "FORWARD_ONE"
+				if move[1] < -0.01 and abs(move[0]) <= 0.01:
+					if keymap.BINDS["ATTACK_ONE"].tap() == True:
+						self.doAnim(NAME=anim+"3", FRAME=(0,60), LAYER=1, PRIORITY=0, BLEND=0)
+						self.data["COOLDOWN"] = 60
+						self.data["ATTACKCHAIN"] = "BACKWARD_SPIN"
 
 			elif self.data["ATTACKCHAIN"] == "NONE":
 				if keymap.BINDS["ATTACK_ONE"].tap() == True:
 					self.doAnim(NAME=anim, FRAME=(0,50), LAYER=0, PRIORITY=2, BLEND=10)
 					self.data["COOLDOWN"] = 50
 					self.data["ATTACKCHAIN"] = "STAND_ONE"
-				if keymap.BINDS["ALTACT"].tap() == True:
-					self.doAnim(NAME=anim+"3", FRAME=(0,60), LAYER=1, PRIORITY=0, BLEND=0)
-					self.data["COOLDOWN"] = 60
-					self.data["ATTACKCHAIN"] = "STAND_SPIN"
 
 			elif self.data["ATTACKCHAIN"] == "STAND_ONE":
 				if keymap.BINDS["ATTACK_ONE"].tap() == True:

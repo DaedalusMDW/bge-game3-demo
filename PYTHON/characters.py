@@ -430,9 +430,11 @@ class TRPlayer(ActorPlayer):
 		return False
 
 	def checkEdge(self, edge):
-		rayto = edge+self.owner.getAxisVect([0,-1,0.1])
-		rayfrom = edge+self.owner.getAxisVect([0,0,0.1])
-		OBJ, PNT, NRM = self.owner.rayCast(rayto, rayfrom, self.WALL_DIST, "GROUND", 1, 1, 0)
+		y = self.WALL_DIST
+		z = self.EDGE_H-self.GND_H
+		rayto = edge+self.owner.getAxisVect([0,-y,-z])
+		rayfrom = edge+self.owner.getAxisVect([0,-y,0.1])
+		OBJ, PNT, NRM = self.owner.rayCast(rayto, rayfrom, abs(z), "GROUND", 1, 1, 0)
 		if OBJ == None:
 			return True
 		return False
