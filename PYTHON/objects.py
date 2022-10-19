@@ -47,11 +47,13 @@ class MachineGun(weapon.CorePlayerWeapon):
 
 	def ST_Active(self):
 		owner = self.owner
+		camera = base.SC_SCN.active_camera
+
 		mesh = self.objects["Mesh"]
 		barrel = self.objects["Barrel"]
 
-		camera = base.SC_SCN.active_camera
-		plrobj = self.owning_player.objects["Root"]
+		plr = self.owning_player
+		plrobj = plr.objects["Root"]
 
 		vec = viewport.getRayVec()
 
@@ -83,7 +85,7 @@ class MachineGun(weapon.CorePlayerWeapon):
 				rnd = logic.getRandomFloat()
 				rndx = (logic.getRandomFloat()-0.5)*0.05
 				rndy = (logic.getRandomFloat()-0.5)*0.05
-				rvec = self.objects["Barrel"].getAxisVect((rndx,5,rndy)).normalized()
+				rvec = barrel.getAxisVect((rndx,5,rndy)).normalized()
 
 				ammo = base.SC_SCN.addObject("AMMO_Bullet", barrel, 50)
 				ammo.alignAxisToVect(ammo.getVectTo(camera)[1], 2, 1.0)
@@ -112,19 +114,20 @@ class MachineGun(weapon.CorePlayerWeapon):
 		else:
 			self.data["COOLDOWN"] -= 1
 
-		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Rifle")
+		self.sendEvent("WEAPON", plr, "TYPE", TYPE="Rifle")
 
 		if self.data["STRAFE"] == None:
-			self.data["STRAFE"] = self.owning_player.data["STRAFE"]
-		self.owning_player.data["STRAFE"] = True
+			self.data["STRAFE"] = plr.data["STRAFE"]
+		plr.data["STRAFE"] = True
 
 		hrz = plrobj.getAxisVect((0,0,1))
-
 		ang = self.toDeg(vec.angle(hrz))/180
-		hand = self.data["HAND"].split("_")[1]
-		anim = self.owning_player.ANIMSET+"RangedRifleAim"+hand
-		self.owning_player.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
-		self.owning_player.doAnim(LAYER=1, SET=ang*20)
+
+		hand = plr.HAND.get(self.data["HAND"], "").split("_")
+		if len(hand) > 1:
+			anim = plr.ANIMSET+"RangedRifleAim"+hand[1]
+			plr.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
+			plr.doAnim(LAYER=1, SET=ang*20)
 
 		up = viewport.VIEWCLASS.objects["Rotate"].getAxisVect((1,0,0))
 		fw = plrobj.getAxisVect((0,1,0))
@@ -173,11 +176,13 @@ class HandGun(weapon.CorePlayerWeapon):
 
 	def ST_Active(self):
 		owner = self.owner
+		camera = base.SC_SCN.active_camera
+
 		mesh = self.objects["Mesh"]
 		barrel = self.objects["Barrel"]
 
-		camera = base.SC_SCN.active_camera
-		plrobj = self.owning_player.objects["Root"]
+		plr = self.owning_player
+		plrobj = plr.objects["Root"]
 
 		vec = viewport.getRayVec()
 
@@ -242,33 +247,34 @@ class HandGun(weapon.CorePlayerWeapon):
 		else:
 			self.data["COOLDOWN"] -= 1
 
-		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Pistol")
+		self.sendEvent("WEAPON", plr, "TYPE", TYPE="Pistol")
 
 		if sec == None:
 			mesh.localPosition = self.createVector()
 			mesh.localOrientation = self.createMatrix()
 			if self.data["STRAFE"] != None:
-				self.owning_player.data["STRAFE"] = self.data["STRAFE"]
+				plr.data["STRAFE"] = self.data["STRAFE"]
 				self.data["STRAFE"] = None
-				self.owning_player.doAnim(LAYER=1, STOP=True)
+				plr.doAnim(LAYER=1, STOP=True)
 			if mv == False:
 				self.doPlayerAnim("LOOP")
 			else:
-				self.owning_player.doAnim(LAYER=1, STOP=True)
+				plr.doAnim(LAYER=1, STOP=True)
 			return
 		else:
 			if self.data["STRAFE"] == None:
-				self.data["STRAFE"] = self.owning_player.data["STRAFE"]
-				self.owning_player.doAnim(LAYER=1, STOP=True)
-			self.owning_player.data["STRAFE"] = True
+				self.data["STRAFE"] = plr.data["STRAFE"]
+				plr.doAnim(LAYER=1, STOP=True)
+			plr.data["STRAFE"] = True
 
 		hrz = plrobj.getAxisVect((0,0,1))
-
 		ang = self.toDeg(vec.angle(hrz))/180
-		hand = self.data["HAND"].split("_")[1]
-		anim = self.owning_player.ANIMSET+"RangedPistolAim"+hand
-		self.owning_player.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
-		self.owning_player.doAnim(LAYER=1, SET=ang*20)
+
+		hand = plr.HAND.get(self.data["HAND"], "").split("_")
+		if len(hand) > 1:
+			anim = plr.ANIMSET+"RangedPistolAim"+hand[1]
+			plr.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
+			plr.doAnim(LAYER=1, SET=ang*20)
 
 		up = viewport.VIEWCLASS.objects["Rotate"].getAxisVect((1,0,0))
 		fw = plrobj.getAxisVect((0,1,0))

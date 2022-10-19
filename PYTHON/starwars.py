@@ -913,6 +913,12 @@ class Ahsoka(characters.TRPlayer):
 	def weaponManager(self):
 		weap = self.data["WPDATA"]
 
+		if self.player_id == None:
+			weap["CURRENT"] = "NONE"
+			weap["ACTIVE"] = "NONE"
+			self.active_weapon = None
+			return
+
 		pri = self.getSlotChild("Hip_L")
 		sec = self.getSlotChild("Hip_R")
 
@@ -922,29 +928,36 @@ class Ahsoka(characters.TRPlayer):
 			if sec != None:
 				pri = sec
 			else:
+				weap["CURRENT"] = "NONE"
 				weap["ACTIVE"] = "NONE"
 				self.active_weapon = None
 				return
 
+		weap["CURRENT"] = "MELEE"
+
+		dict = weap["WHEEL"][weap["CURRENT"]]
+		dict["ID"] = 0
+
 		## STATE MANAGER ##
 		if weap["ACTIVE"] == "ACTIVE":
 			L = pri.stateSwitch(True)
+			self.sendEvent("WP_HAND", pri, "MAIN")
 			R = None
 			if sec != None:
 				R = sec.stateSwitch(True)
+				self.sendEvent("WP_HAND", sec, "OFF")
+
+			self.active_weapon = pri
 
 			if L == True:
 				self.sendEvent("WP_BLADE", pri)
+				self.weaponLoop()
 			if R == True:
 				self.sendEvent("WP_BLADE", sec)
 
-			if L == True and self.player_id != None:
-				self.active_weapon = pri
-				self.weaponLoop()
-
 			self.data["STRAFE"] = True
 
-			if keymap.BINDS["SHEATH"].tap() == True and self.player_id != None:
+			if keymap.BINDS["SHEATH"].tap() == True:
 				self.doAnim(STOP=True, LAYER=0)
 				self.doAnim(STOP=True, LAYER=1)
 				self.data["ATTACKCHAIN"] = "NONE"
@@ -957,7 +970,7 @@ class Ahsoka(characters.TRPlayer):
 
 			self.active_weapon = None
 
-			if keymap.BINDS["SHEATH"].tap() == True and self.player_id != None:
+			if keymap.BINDS["SHEATH"].tap() == True:
 				weap["ACTIVE"] = "ACTIVE"
 
 
@@ -1000,10 +1013,11 @@ class LaserGun(weapon.CorePlayerWeapon):
 
 	def ST_Active(self):
 		owner = self.owner
-		plrobj = self.owning_player.objects["Root"]
+		plr = self.owning_player
+		plrobj = plr.objects["Root"]
 		vec = viewport.getRayVec()
-		#if self.owning_player.rayhit != None:
-		#	vec = (self.owning_player.rayhit[1]-owner.worldPosition).normalized()
+		#if plr.rayhit != None:
+		#	vec = (plr.rayhit[1]-owner.worldPosition).normalized()
 
 		self.data["HUD"]["Text"] = "Rockets: "+str(self.data["ROCKETS"])
 		self.data["HUD"]["Stat"] = 100*(self.data["ROCKETS"]>0)
@@ -1066,19 +1080,20 @@ class LaserGun(weapon.CorePlayerWeapon):
 		else:
 			self.data["COOLDOWN"] -= 1
 
-		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Rifle")
+		self.sendEvent("WEAPON", plr, "TYPE", TYPE="Rifle")
 
 		if self.data["STRAFE"] == None:
-			self.data["STRAFE"] = self.owning_player.data["STRAFE"]
-		self.owning_player.data["STRAFE"] = True
+			self.data["STRAFE"] = plr.data["STRAFE"]
+		plr.data["STRAFE"] = True
 
 		hrz = plrobj.getAxisVect((0,0,1))
-
 		ang = self.toDeg(vec.angle(hrz))/180
-		hand = self.data["HAND"].split("_")[1]
-		anim = self.owning_player.ANIMSET+"RangedRifleAim"+hand
-		self.owning_player.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
-		self.owning_player.doAnim(LAYER=1, SET=ang*20)
+
+		hand = plr.HAND.get(self.data["HAND"], "").split("_")
+		if len(hand) > 1:
+			anim = plr.ANIMSET+"RangedRifleAim"+hand[1]
+			plr.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
+			plr.doAnim(LAYER=1, SET=ang*20)
 
 		up = viewport.VIEWCLASS.objects["Rotate"].getAxisVect((1,0,0))
 		fw = plrobj.getAxisVect((0,1,0))
@@ -1093,9 +1108,10 @@ class LaserGun(weapon.CorePlayerWeapon):
 class Lightsaber(objects.BasicSword):
 
 	NAME = "Lightsaber"
-	OFFSET = (0,0,0)
-	SCALE = 0.7
+	HAND = "AUTO"
 	WAIT = 30
+	SCALE = 0.7
+	OFFSET = (0,0,0)
 	BLADETYPE = "GFX_LightSaber.Blade"
 	BLADECOLOR = (1,1,1,1)
 	BLADESIZE = 1
@@ -1159,7 +1175,6 @@ class LightsaberW(Lightsaber):
 class LightsaberV(Lightsaber):
 
 	NAME = "Ergonomic Lightsaber"
-	HAND = "AUTO"
 	BLADETYPE = "GFX_LightSaber.BladeToon"
 	BLADECOLOR = (1,0,0,1)
 	BLADESIZE = 0.8

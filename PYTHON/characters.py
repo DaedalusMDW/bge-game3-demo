@@ -362,11 +362,11 @@ class ActorPlayer(player.CorePlayer):
 			#vec = viewport.getRayVec()
 			#hrz = self.owner.getAxisVect([0,0,1])
 			#ang = self.toDeg(vec.angle(hrz))/180
-
-			#hand = cls.data["HAND"].split("_")[1]
-			#anim = "Ranged"+evt.getProp("TYPE")+"Aim"+hand
-			#self.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
-			#self.doAnim(LAYER=1, SET=ang*20)
+			#hand = self.HAND.get(cls.data["HAND"], "").split("_")
+			#if len(hand) > 1:
+			#	anim = "Ranged"+evt.getProp("TYPE")+"Aim"+hand[1]
+			#	self.doAnim(NAME=anim, FRAME=(-5,25), LAYER=1, BLEND=10)
+			#	self.doAnim(LAYER=1, SET=ang*20)
 
 			if keymap.BINDS["ATTACK_ONE"].tap() == True:
 				self.sendEvent("WP_FIRE", cls, "PRIMARY", "TAP")
@@ -388,8 +388,10 @@ class ActorPlayer(player.CorePlayer):
 				self.sendEvent("WP_CLEAR", cls)
 
 				if keymap.BINDS["ATTACK_ONE"].tap() == True:
-					hand = cls.data["HAND"].split("_")[1]
-					self.doAnim(NAME=anim+hand, FRAME=(0,45), LAYER=1)
+					h = cls.data["HAND"]
+					hand = self.HAND.get(h, "").split("_")
+					if len(hand) > 1:
+						self.doAnim(NAME=anim+hand[1], FRAME=(0,45), LAYER=1+(h=="OFF"))
 					self.data["COOLDOWN"] = 50
 
 			else:
