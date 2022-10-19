@@ -11,7 +11,7 @@ from game3 import GAMEPATH, firstrun, base, settings, config, keymap, world
 DTR = logic.globalDict.get("_DESKTOP", DTR)
 logic.globalDict["_DESKTOP"] = DTR
 
-VER = "2.0"
+VER = "3.0 alpha"
 
 
 def RUN(cont):
@@ -24,17 +24,11 @@ def RUN(cont):
 	map = profile["GLBData"].get("NEWLEVEL", None)
 	scn = profile["GLBData"].get("NEWSCENE", None)
 
-	if map == None or map not in logic.globalDict["BLENDS"]:
-		if "Button.Maps.Resume" in scene.objects:
+	if "Button.Maps.Resume" in scene.objects:
+		if map == None or map not in logic.globalDict["BLENDS"]:
 			scene.objects["Button.Maps.Resume"].endObject()
-
-	#	if "Button.MapSelect" not in scene.objects:
-	#		scene.addObject("Button.MapSelect", owner, 0)
-	#else:
-	#	if "Button.Launch" in scene.objects:
-	#		scene.objects["Button.MapSelect"].endObject()
-	#	if "Button.Resume" not in scene.objects:
-	#		scene.addObject("Button.Resume", owner, 0)
+		else:
+			scene.objects["Button.Maps.Resume"].setVisible(True, True)
 
 
 def VERSION(cont):
@@ -186,7 +180,7 @@ def SAVE():
 	profile = logic.globalDict["PROFILES"][current["Profile"]]
 
 	path = GAMEPATH
-	name = "Base"+VER
+	name = "Base"+VER.strip().replace(".","",3)
 
 	if "_" not in current["Profile"]:
 		name = current["Profile"]
@@ -196,13 +190,15 @@ def SAVE():
 	settings.SaveJSON(path+name+"Profile.json", dict, "\t")
 	settings.SaveJSON(GAMEPATH+"Graphics.cfg", logic.globalDict["GRAPHICS"])
 
+	print("Profile Saved:", name+"Profile.json")
+
 
 def LOAD():
 	global VER
 	current = logic.globalDict["CURRENT"]
 
 	path = GAMEPATH
-	name = "Base"+VER
+	name = "Base"+VER.strip().replace(".","",3)
 
 	if "_" not in current["Profile"]:
 		name = current["Profile"]
@@ -216,6 +212,8 @@ def LOAD():
 
 	base.PROFILE = dict
 	base.WORLD = dict["GLBData"]
+
+	print("Profile Loaded:", name+"Profile.json")
 
 	return dict
 
