@@ -14,6 +14,13 @@ There is a continually expanding collection of example content to provide a vari
 - Planets
   - just when you thought space was the final frontier... the full power of container streaming on display
   - points of interest and detail will continue to be added to planets as models are made
+- TreeLods
+  - more than the name implies, this is the first map that has gameplay elements
+  - not everything has to use game3, this shows how different logic can be combined with game3
+  - and of course, an object scattering script to dynamically spawn trees around the player
+  - navmesh with obstacles
+- LavaPits
+  - by completion, level one of what im hoping will evolve into its own game.  to be used as a feedback on mechanics.
 ### Assets
 - Zephyr Ship
   - this project was originally called the "Zephyr Demo" showcasing container streaming and persistance data being passed across game world data
