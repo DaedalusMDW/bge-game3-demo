@@ -292,13 +292,14 @@ class QuinJet(vehicle.CoreAircraft):
 	INVENTORY = {"Gun":"WP_GatlingGun", "Missile_L":"WP_Missile", "Missile_R":"WP_Missile"}
 	SLOTS = {"ONE":"Gun", "TWO":"Missile"}
 
-	CAM_RANGE = (20, 36)
-	CAM_ZOOM = 3
+	CAM_RANGE = (24, 40)
+	CAM_STEPS = 2
+	CAM_ZOOM = 0
 	CAM_MIN = 1
 	CAM_SLOW = 5
-	CAM_HEIGHT = 0.1
+	CAM_HEIGHT = 0.2
 	CAM_HEAD_G = 25
-	CAM_OFFSET = (0,0,1)
+	CAM_OFFSET = (0,0,2)
 
 	WH_FRONT = 6
 	WH_REAR = -1.5
