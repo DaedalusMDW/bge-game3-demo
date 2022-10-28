@@ -256,12 +256,13 @@ def PLAYER(cont):
 			del WORLD["PLAYERS"]
 
 	else:
-		if "PLAYERS" not in WORLD:
-			WORLD["PLAYERS"] = {}
 		if s == "":
-			cont.owner["PLAYER"] = WORLD["PLAYERS"].get("1", config.DEFAULT_PLAYER)
+			d = WORLD.get("PLAYERS", {})
+			cont.owner["PLAYER"] = d.get("1", "")
 		else:
 			s = s.strip("\n")
 			s = s.strip("\t")
+			if "PLAYERS" not in WORLD:
+				WORLD["PLAYERS"] = {}
 			WORLD["PLAYERS"]["1"] = s
 
