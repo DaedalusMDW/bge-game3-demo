@@ -580,19 +580,19 @@ class Silverbird(vehicle.CoreAircraft):
 		self.active_post.append(self.fireFX)
 
 		self.custom_binds = {
-			"THROTTLEUP":    input.KeyBase("00",  "WKEY",           "",  JOYAXIS=(1, "NEG", "A")),
-			"THROTTLEDOWN":  input.KeyBase("01",  "SKEY",           "",  JOYAXIS=(1, "POS", "A")),
+			"THROTTLEUP":    input.KeyBase("00",  "WKEY",           "",  JOYAXIS=(5, "SLIDER", "A")),
+			"THROTTLEDOWN":  input.KeyBase("01",  "SKEY",           "",  JOYAXIS=(4, "SLIDER", "A")),
 			"YAWLEFT":       input.KeyBase("02",  "LEFTARROWKEY",   "",  JOYAXIS=(2, "NEG", "A")),
 			"YAWRIGHT":      input.KeyBase("03",  "RIGHTARROWKEY",  "",  JOYAXIS=(2, "POS", "A")),
-			"PITCHUP":       input.KeyBase("04",  "DOWNARROWKEY",   "",  JOYAXIS=(3, "NEG", "A")),
-			"PITCHDOWN":     input.KeyBase("05",  "UPARROWKEY",     "",  JOYAXIS=(3, "POS", "A")),
+			"PITCHUP":       input.KeyBase("04",  "DOWNARROWKEY",   "",  JOYAXIS=(3, "POS", "A")),
+			"PITCHDOWN":     input.KeyBase("05",  "UPARROWKEY",     "",  JOYAXIS=(3, "NEG", "A")),
 			"BANKLEFT":      input.KeyBase("06",  "QKEY",           ""  ),
 			"BANKRIGHT":     input.KeyBase("07",  "EKEY",           ""  ),
-			"ASCEND":        input.KeyBase("08",  "SPACEKEY",       "",  JOYAXIS=(5, "SLIDER", "A")),
-			"DESCEND":       input.KeyBase("09",  "CKEY",           "",  JOYAXIS=(4, "SLIDER", "A")),
+			"ASCEND":        input.KeyBase("08",  "SPACEKEY",       "",  JOYAXIS=(1, "NEG", "A")),
+			"DESCEND":       input.KeyBase("09",  "CKEY",           "",  JOYAXIS=(1, "POS", "A")),
 			"STRAFELEFT":    input.KeyBase("10",  "AKEY",           "",  JOYAXIS=(0, "NEG", "A")),
 			"STRAFERIGHT":   input.KeyBase("11",  "DKEY",           "",  JOYAXIS=(0, "POS", "A")),
-			"BOOST":         input.KeyBase("12",  "LEFTSHIFTKEY",   "",  JOYBUTTON=10),
+			"BOOST":         input.KeyBase("12",  "LEFTSHIFTKEY",   "",  JOYBUTTON=7),
 			#"STRAFE":        input.KeyBase("13",  "LEFTALTKEY",     "",  JOYBUTTON=0),
 			#"ROLL":          input.KeyBase("13",  "NONE",           "",  JOYBUTTON=0),
 
@@ -605,8 +605,8 @@ class Silverbird(vehicle.CoreAircraft):
 			"SET_LEFT":      input.KeyBase("24",  "LEFTARROWKEY",   "",  JOYBUTTON=13),
 			"SET_RIGHT":     input.KeyBase("25",  "RIGHTARROWKEY",  "",  JOYBUTTON=14),
 
-			"ATTACK_ONE":    input.KeyBase("30",  "LEFTMOUSE",      "",  JOYBUTTON=0),
-			"ATTACK_TWO":    input.KeyBase("31",  "RIGHTMOUSE",     "",  JOYBUTTON=9)
+			"ATTACK_ONE":    input.KeyBase("30",  "LEFTMOUSE",      "",  JOYBUTTON=9),
+			"ATTACK_TWO":    input.KeyBase("31",  "RIGHTMOUSE",     "",  JOYBUTTON=10)
 		}
 
 		for slot in ["L1", "L2", "L3", "R1", "R2", "R3"]:
