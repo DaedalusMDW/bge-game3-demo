@@ -462,7 +462,10 @@ class QuinJet(vehicle.CoreAircraft):
 		linV = owner.localLinearVelocity
 
 		tqx = (torque[0])*400
-		tqy = (torque[1]+force[0])*800
+		tqy = torque[1]+force[0]
+		if abs(tqy) > 1.0:
+			tqy = 1-(2*(tqy<0))
+		tqy = tqy*800
 		tqz = (torque[2])*(400-linV[1])
 
 		owner.applyTorque((tqx, tqy, tqz), True)

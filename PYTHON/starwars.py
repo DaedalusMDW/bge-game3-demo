@@ -452,16 +452,12 @@ class Starfighter(vehicle.CoreAircraft):
 
 		## FORCES ##
 		power, hover = self.getEngineForce()
-		strafe = force[0]*200
 
 		fac = self.data["POWER"]/self.AERO["POWER"]
 
 		mx = abs(linV.length)
 		if mx > 100:
 			mx = 100
-		tqx = torque[0]*(300+(mx*6))
-		tqy = torque[1]*(300+(mx*6))
-		tqz = torque[2]*(300+(mx*6))
 
 		if self.gravity.length < 1:
 			hover = force[2]*500
@@ -470,6 +466,7 @@ class Starfighter(vehicle.CoreAircraft):
 			self.data["HOVER"][1] = 0
 			self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
 		else:
+			strafe = force[0]*200
 			self.data["HUD"]["Lift"] = (self.data["HOVER"][0]/9.8)+((self.data["HOVER"][1]/self.AERO["HOVER"])*33)
 
 		## FLY mODES ##
@@ -477,6 +474,10 @@ class Starfighter(vehicle.CoreAircraft):
 			power = force[1]*1000
 			fac = abs(force[1]*0.1)
 			self.data["POWER"] = 0
+
+			tqx = torque[0]*300
+			tqy = torque[1]*150
+			tqz = torque[2]*400
 
 			if keymap.BINDS["TOGGLEMODE"].tap() == True and self.data["LANDSTATE"] == "FLY":
 				self.data["LANDSTATE"] = "FLYLOCK"
@@ -489,7 +490,14 @@ class Starfighter(vehicle.CoreAircraft):
 			power += 3000
 			power *= (self.data["FLYMODE"]/100)
 			hover = force[2]*1000
-			strafe = force[0]*1000
+			strafe = 0 #force[0]*1000
+
+			tqx = torque[0]*(300+(mx*6))
+			tqy = torque[1]+force[0]
+			if abs(tqy) > 1.0:
+				tqy = 1-(2*(tqy<0))
+			tqy = tqy*(300+(mx*6))
+			tqz = torque[2]*(300+(mx*6))
 
 			self.data["HOVER"][0] = 1000
 			self.data["HOVER"][1] = 0
