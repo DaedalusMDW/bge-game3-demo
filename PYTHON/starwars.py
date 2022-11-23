@@ -712,7 +712,7 @@ class Ahsoka(characters.TRPlayer):
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
 	OFFSET = (0, 0.03, 0.16)
 	SPEED = 0.12
-	JUMP = 3
+	JUMP = 7
 	GND_H = 1.0
 	EYE_H = 1.535
 	EDGE_H = 1.93
@@ -735,7 +735,8 @@ class Ahsoka(characters.TRPlayer):
 		return dict
 
 	def runModifiers(self):
-		self.data["RECHARGE"] = 0.05
+		self.data["SPEED"] = self.SPEED
+		self.data["RECHARGE"] = 0.08
 
 		super().runModifiers()
 
@@ -794,11 +795,23 @@ class Ahsoka(characters.TRPlayer):
 		char = self.objects["Character"]
 
 		move = self.motion["Move"].normalized()
+		speed = self.motion["Move"].length
 
-		if self.data["ATTACKCHAIN"] == "BLOCK":
+		attack = self.data["ATTACKCHAIN"]
+		ac = attack.split("_")[0]
+
+		linLV = self.motion["Local"].copy()
+		linLV[2] = 0
+		lv = linLV.normalized()
+
+		if attack == "BLOCK":
 			mx = 0.05
-		elif self.data["RUN"] == False or self.motion["Move"].length <= 0.7 or self.data["SPEED"] <= 0:
+		elif ac == "PLACE":
+			mx = 0.0
+		elif self.data["RUN"] == False or speed <= 0.7 or self.data["SPEED"] <= 0:
 			mx = 0.035
+		elif lv[1] < 0 and abs(lv[1]) > 0.5:
+			mx = 0.05
 		else:
 			mx = self.data["SPEED"]
 
@@ -806,22 +819,19 @@ class Ahsoka(characters.TRPlayer):
 		self.doMovement(vref, mx)
 		self.doMoveAlign(up=False)
 
-		linLV = self.motion["Local"].copy()
-		linLV[2] = 0
 		action = "IDLE"
 
-		if self.data["ATTACKCHAIN"] == "BLOCK":
+		if attack == "BLOCK":
 			action = "BLOCK"
 
-		elif linLV.length > 0.1 and self.data["ATTACKCHAIN"].split("_")[0] != "STAND":
+		elif linLV.length > 0.1 and ac not in ["STAND", "PLACE"]:
 			action = "FORWARD"
-			lv = linLV.normalized()
 
-			if lv < 0:
+			if lv[1] < 0:
 				action = "BACKWARD"
-			if lv[0] > 0 and abs(lv[1]) < 0.7:
+			if lv[0] > 0 and abs(lv[1]) < 0.5:
 				action = "STRAFE_R"
-			if lv[0] < 0 and abs(lv[1]) < 0.7:
+			if lv[0] < 0 and abs(lv[1]) < 0.5:
 				action = "STRAFE_L"
 
 			if linLV.length <= (0.04*60):
@@ -831,7 +841,7 @@ class Ahsoka(characters.TRPlayer):
 
 		## Jump/Crouch ##
 		if keymap.BINDS["PLR_JUMP"].tap() == True:
-			self.doJump(move=1.0, align=True)
+			self.doJump(height=3.0, move=1.0, align=True)
 		elif keymap.BINDS["PLR_DUCK"].active() == True:
 			self.doCrouch(True)
 
@@ -846,12 +856,14 @@ class Ahsoka(characters.TRPlayer):
 				vec = self.gravity.normalized()
 				mx = (tx-self.jump_timer)/tx
 				owner.applyForce(-vec*mx*15, False)
-				self.data["ENERGY"] -= 0.2
+				self.data["ENERGY"] -= 0.4
 
 	def weaponLoop(self):
 		pri = self.getSlotChild("Hip_L")
 		sec = self.getSlotChild("Hip_R")
 		move = self.motion["Move"]
+		linLV = self.motion["Local"].copy()
+		linLV[2] = 0
 		ac = self.data["ATTACKCHAIN"].split("_")[0]
 
 		if (move.length > 0.01 and ac == "STAND") or (self.jump_state != "NONE" and ac not in ["NONE", "JUMP"]):
@@ -892,17 +904,16 @@ class Ahsoka(characters.TRPlayer):
 				self.data["COOLDOWN"] = 0
 				self.data["ATTACKCHAIN"] = "BLOCK"
 
-			elif move.length > 0.01:
-				if move[1] > 0.01 and abs(move[0]) <= 0.01:
-					if keymap.BINDS["ATTACK_ONE"].tap() == True:
+			elif move.length > 0.01 and keymap.BINDS["ATTACK_ONE"].tap() == True:
+				if abs(move[0]) < abs(move[1]):
+					if move[1] > 0.01:
 						self.doAnim(NAME=anim+"Fast", FRAME=(0,35), LAYER=1, PRIORITY=0, BLEND=0)
 						self.data["COOLDOWN"] = 35
 						self.data["ATTACKCHAIN"] = "FORWARD_ONE"
-				if move[1] < -0.01 and abs(move[0]) <= 0.01:
-					if keymap.BINDS["ATTACK_ONE"].tap() == True:
+					if move[1] < -0.01 and linLV.length < 2.5:
 						self.doAnim(NAME=anim+"3", FRAME=(0,60), LAYER=1, PRIORITY=0, BLEND=0)
 						self.data["COOLDOWN"] = 60
-						self.data["ATTACKCHAIN"] = "BACKWARD_SPIN"
+						self.data["ATTACKCHAIN"] = "PLACE_SPIN"
 
 			elif self.data["ATTACKCHAIN"] == "NONE":
 				if keymap.BINDS["ATTACK_ONE"].tap() == True:
@@ -940,6 +951,8 @@ class Ahsoka(characters.TRPlayer):
 			self.sendEvent("WP_FIRE", sec)
 
 			self.data["COOLDOWN"] -= 1
+
+		self.objects["Character"]["DEBUG2"] = self.data["ATTACKCHAIN"]+": "+str(self.data["COOLDOWN"])
 
 	def weaponManager(self):
 		weap = self.data["WPDATA"]

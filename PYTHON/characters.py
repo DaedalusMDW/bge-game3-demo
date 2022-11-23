@@ -12,6 +12,8 @@ class ActorPlayer(player.CorePlayer):
 	NAME = "Stick Man"
 	INVENTORY = {"Shoulder_R": "WP_MachineGun", "Hip_R":"WP_HandGun"}
 
+	SLOPE = 50
+
 	def defaultData(self):
 		self.env_dim = None
 		self.npc_leader = None
@@ -189,20 +191,21 @@ class ActorPlayer(player.CorePlayer):
 			if mx > self.data["SPEED"]:
 				mx = self.data["SPEED"]
 
-			evt = self.getFirstEvent("INTERACT", "ACTOR")
+			act = self.getFirstEvent("INTERACT", "ACTOR")
+			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 
-			if evt != None and self.npc_state >= 0:
+			if act != None and self.npc_state >= 0:
 				self.npc_state += 1
+			else:
+				self.npc_state = 0
 
 			if self.npc_state > 30:
 				self.npc_state = -2
 				self.active_state = self.ST_IdleRD
 				return
-			elif evt == None:
-				if self.npc_state >= 1:
-					self.npc_state = -1
-				else:
-					self.npc_state = 0
+
+			if evt != None and self.npc_state >= 0:
+				self.npc_state = -1
 
 			if self.npc_state == -1 or vec.length > 10 or self.getParent().dict.get("Vehicle", None) != None:
 				self.removeContainerParent()
@@ -412,6 +415,9 @@ class TRPlayer(ActorPlayer):
 		self.wallraydist = self.WALL_DIST
 		self.wallrayto = self.createVector(vec=(0, self.WALL_DIST, 0))
 		self.wallrayup = self.createVector(vec=(0, self.WALL_DIST, self.EDGE_H-self.GND_H+0.3))
+		self.wallfootto = self.createVector(vec=(0, self.WALL_DIST, -self.GND_H))
+		self.wallfootup = self.createVector(vec=(0, self.WALL_DIST, 0))
+		self.wallnrm = None
 
 		dict = super().defaultData()
 		dict["WALLJUMPS"] = 0
@@ -431,10 +437,9 @@ class TRPlayer(ActorPlayer):
 
 	def checkEdge(self, edge):
 		y = self.WALL_DIST
-		z = self.EDGE_H-self.GND_H
-		rayto = edge+self.owner.getAxisVect([0,-y,-z])
-		rayfrom = edge+self.owner.getAxisVect([0,-y,0.1])
-		OBJ, PNT, NRM = self.owner.rayCast(rayto, rayfrom, abs(z), "GROUND", 1, 1, 0)
+		rayto = edge+self.owner.getAxisVect([0,0,0.1])
+		rayfrom = edge+self.owner.getAxisVect([0,-y,-0.1])
+		OBJ, PNT, NRM = self.owner.rayCast(rayto, rayfrom, 0, "GROUND", 1, 1, 0)
 		if OBJ == None:
 			return True
 		return False
@@ -449,10 +454,10 @@ class TRPlayer(ActorPlayer):
 		align = owner.worldOrientation*align
 
 		jump = axis.copy()
-		jump[2] += 1.5
+		jump[2] += 1.25
 		jump.normalize()
 		jump = owner.worldOrientation*jump
-		owner.worldLinearVelocity = jump*8
+		owner.worldLinearVelocity = jump*self.JUMP*1.1
 
 		self.alignPlayer(axis=align)
 
@@ -462,7 +467,7 @@ class TRPlayer(ActorPlayer):
 			if angle >= 3.1:
 				viewport.getObject("Root").applyRotation((0,0,0.1), True)
 
-		self.data["ENERGY"] -= 5
+		self.data["ENERGY"] -= 10
 
 		#self.doPlayerAnim("JUMP")
 		self.doAnim(NAME=self.ANIMSET+"WallJump", FRAME=(0,2), PRIORITY=2, MODE="PLAY", BLEND=2)
@@ -472,20 +477,20 @@ class TRPlayer(ActorPlayer):
 		if owner == None:
 			return
 
-		rayup = self.getWorldSpace(owner, self.wallrayup)
-		rayto = self.getWorldSpace(owner, self.wallrayto)
-
 		#if owner.get("XX", None) == None:
 		#	owner["XX"] = owner.scene.addObject("Gimbal", owner, 0)
-		#	owner["XX"].setParent(owner)
+		#	#owner["XX"].setParent(owner)
 
 		#guide = owner["XX"]
 
-		self.objects["Character"]["DEBUG1"] = self.rayorder
+		#self.objects["Character"]["DEBUG1"] = self.rayorder
 
 		if self.groundhit != None or self.gravity.length <= 0.1:
 			#self.rayorder = "NONE"
 			return
+
+		rayup = self.getWorldSpace(owner, self.wallrayup)
+		rayto = self.getWorldSpace(owner, self.wallrayto)
 
 		EDGEOBJ, EDGEPNT, EDGENRM = owner.rayCast(rayto, rayup, self.EDGE_H+0.6, "GROUND", 1, 1, 0)
 
@@ -504,11 +509,12 @@ class TRPlayer(ActorPlayer):
 					return
 
 			## Vault ##
-			if dist >= -0.25 and dist < 0.75 and keymap.BINDS["PLR_JUMP"].tap() == True:
+			if dist >= -0.4 and dist < 0.75 and keymap.BINDS["PLR_JUMP"].tap() == True:
 				if angle < self.SLOPE and self.motion["Move"][1] > 0.1 and self.checkEdge(EDGEPNT) == True:
 					self.resetAcceleration()
 					self.jump_timer = int(self.EDGECLIMB_TIME*0.33)
 					self.ST_EdgeClimb_Set()
+					return
 
 			## Ledge Grab ##
 			if owner.localLinearVelocity[2] < 0 and self.jump_state != "NONE":
@@ -521,11 +527,34 @@ class TRPlayer(ActorPlayer):
 					WP = EDGEPNT-(owner.worldOrientation*WP)
 					owner.worldPosition = list(WP)
 					self.ST_Hanging_Set()
+					return
 
 		else:
 		#	guide.worldPosition = rayup-owner.getAxisVect((0,0,self.EDGE_H+0.6))
 			if self.rayorder == "END":
 				self.rayorder = "NONE"
+
+		## Scramble ##
+		rayup = self.getWorldSpace(owner, self.wallfootup)
+		rayto = self.getWorldSpace(owner, self.wallfootto)
+
+		EDGEOBJ, EDGEPNT, EDGENRM = owner.rayCast(rayto, rayup, 0, "GROUND", 1, 1, 0)
+
+		if EDGEOBJ != None:
+		#	guide.worldPosition = EDGEPNT
+			angle = owner.getAxisVect((0,0,1)).angle(EDGENRM, 0)
+			angle = round(self.toDeg(angle), 2)
+			ledge = self.getLocalSpace(owner, EDGEPNT)
+			dist = ledge[2]
+			offset = self.EDGE_H-self.GND_H
+			wall = self.findWall()
+			print(wall)
+
+			if keymap.BINDS["PLR_JUMP"].tap() == True and angle < self.SLOPE:
+				if 2 > owner.localLinearVelocity[2] > 0 and wall == True:
+					owner.localLinearVelocity[2] += 1.5
+		#else:
+		#	guide.worldPosition = rayto
 
 	## WALL JUMP STATE ##
 	def ST_Advanced_Set(self, wall=None):
@@ -568,7 +597,7 @@ class TRPlayer(ActorPlayer):
 			if self.motion["Move"].length > 0.01:
 				move = self.motion["Move"].normalized()
 				vref = viewport.getDirection((move[0], move[1], 0))
-				owner.applyForce(vref*5, False)
+				owner.applyForce(vref*2, False)
 
 		self.alignToGravity(owner)
 
@@ -593,6 +622,7 @@ class TRPlayer(ActorPlayer):
 		self.objects["Root"].worldLinearVelocity = (0,0,0)
 
 		self.rayorder = "HANG_INIT"
+		self.wallnrm = None
 		self.jump_state = "HANGING"
 		self.jump_timer = 0
 		self.data["HUD"]["Target"] = None
@@ -627,7 +657,11 @@ class TRPlayer(ActorPlayer):
 
 
 			rayfrom = owner.worldPosition+owner.getAxisVect((0,0,offset-0.05))
-			rayto = rayfrom+owner.getAxisVect((0,1,0))
+			if self.wallnrm != None:
+				rayto = rayfrom+self.wallnrm
+				self.wallnrm = None
+			else:
+				rayto = rayfrom+owner.getAxisVect((0,1,0))
 
 			TROBJ, TRPNT, TRNRM = owner.rayCast(rayto, rayfrom, self.WALL_DIST+0.3, "GROUND", 1, 1, 0)
 
@@ -639,6 +673,7 @@ class TRPlayer(ActorPlayer):
 				wall = owner.worldOrientation.inverted()*TRNRM
 				wall[2] = 0
 				wall = wall.normalized()
+				self.wallnrm = owner.worldOrientation*-wall
 
 				point = wall*(self.WALL_DIST-0.05)
 				point = owner.worldOrientation*point
@@ -690,18 +725,17 @@ class TRPlayer(ActorPlayer):
 		edge = self.checkGround(simple=True, ray=(rayto, rayup, 2.0))
 
 		if edge != None:
-			EDPNT = self.getLocalSpace(owner, edge[1])
 			self.groundhit = edge
 			self.getGroundPoint(edge[0])
 
-			rayto = edge[1]+owner.getAxisVect((0, 0.3, 2))
-			rayfrom = owner.worldPosition+owner.getAxisVect((0, 0, self.EYE_H-self.GND_H))
+			rayto = edge[1]+owner.getAxisVect((0, 0.5, 0.1))
+			rayfrom = owner.worldPosition+owner.getAxisVect((0, 0, self.EDGE_H))
 
 			SH, SP, SN = owner.rayCast(rayto, rayfrom, 0, "GROUND", 1, 1, 0)
 
 		if SH != None:
 			self.doAnim(STOP=True)
-			self.doJump(5)
+			self.doJump(5, 3)
 			self.rayorder = "END"
 			self.active_state = self.ST_Walking
 
