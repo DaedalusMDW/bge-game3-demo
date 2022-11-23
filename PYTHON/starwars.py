@@ -320,15 +320,14 @@ class Starfighter(vehicle.CoreAircraft):
 		#self.owner.addDebugProperty("SPEED", True)
 
 	def airLift(self):
-		linV = self.owner.localLinearVelocity
-		grav = -self.gravity.normalized()
+		owner = self.getOwner()
+		linV = owner.localLinearVelocity
 
 		self.lift = 0
 
-		if self.data["FLYMODE"] >= 1:
-			self.lift = self.owner.mass*self.gravity.length
-
-		self.owner.applyForce(grav*self.lift, False)
+		if self.data["FLYMODE"] != 0:
+			self.lift = owner.mass*self.gravity.length
+			owner.applyForce(-self.gravity*owner.mass, False)
 
 		#self.owner["LIFT"] = self.lift
 		#self.owner.addDebugProperty("LIFT", True)
@@ -451,7 +450,7 @@ class Starfighter(vehicle.CoreAircraft):
 		linV = owner.localLinearVelocity
 
 		## FORCES ##
-		power, hover = self.getEngineForce()
+		power, hz = self.getEngineForce()
 
 		fac = self.data["POWER"]/self.AERO["POWER"]
 
@@ -460,24 +459,27 @@ class Starfighter(vehicle.CoreAircraft):
 			mx = 100
 
 		if self.gravity.length < 1:
-			hover = force[2]*500
 			strafe = force[0]*500
 			self.data["HOVER"][0] = 1000
 			self.data["HOVER"][1] = 0
-			self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
+			#self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
 		else:
 			strafe = force[0]*200
-			self.data["HUD"]["Lift"] = (self.data["HOVER"][0]/9.8)+((self.data["HOVER"][1]/self.AERO["HOVER"])*33)
+			#self.data["HUD"]["Lift"] = (self.data["HOVER"][0]/9.8)+((self.data["HOVER"][1]/self.AERO["HOVER"])*33)
 
 		## FLY mODES ##
 		if self.data["FLYMODE"] == 0:
 			power = force[1]*1000
+			hover = (force[2]*500)+(owner.mass*self.gravity.length)
 			fac = abs(force[1]*0.1)
 			self.data["POWER"] = 0
 
 			tqx = torque[0]*300
 			tqy = torque[1]*150
-			tqz = torque[2]*400
+			tqz = torque[2]*500
+
+			self.data["HOVER"][0] = 1000
+			self.data["HOVER"][1] = 0
 
 			if keymap.BINDS["TOGGLEMODE"].tap() == True and self.data["LANDSTATE"] == "FLY":
 				self.data["LANDSTATE"] = "FLYLOCK"
@@ -511,22 +513,23 @@ class Starfighter(vehicle.CoreAircraft):
 				self.data["LANDSTATE"] = "FLY"
 				self.data["FLYMODE"] = 0
 
-			self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
+			#self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
 			self.objects["HUD"]["HV"].color[0] = 0
 			self.objects["HUD"]["HV"].color[1] = 0
+
+		self.data["HUD"]["Lift"] = ((force[2]+1)/2)*100
 
 		## LANDING GEAR ##
 		if self.data["LANDSTATE"] == "LAND":
 			power *= 0.5
 			rayobj = False
 			if self.gravity.length >= 1 and force[2] < 0.1:
-				rayto = owner.worldPosition+self.gravity
+				rayto = owner.worldPosition+owner.getAxisVect((0,0,-1))
 				rayobj = owner.rayCastTo(rayto, 0.8, "GROUND")
 
 			if rayobj == None:
 				power *= 0.5
 				hover *= 0.5
-				owner.applyForce(-self.gravity*owner.mass*0.5, False)
 
 				up = self.gravity.normalized()
 				tx = (self.toDeg(up.angle(owner.getAxisVect((0,-1,0))))-90)/90
@@ -534,14 +537,19 @@ class Starfighter(vehicle.CoreAircraft):
 				gz = up.dot(owner.getAxisVect((0,0,-1)))
 				if gz < 0:
 					hover = force[2]*200
-					owner.applyForce(-self.gravity*owner.mass*0.5, False)
+					owner.applyForce(-self.gravity*owner.mass, False)
 					tx = 1-(2*(tx<0))
 					ty = 1-(2*(ty<0))
+				else:
+					owner.applyForce(-self.gravity*owner.mass*0.5, False)
 				owner.applyTorque((tx*300, ty*200, 0), True)
 			elif rayobj != False:
 				power = 0
 				strafe = 0
-				self.data["HOVER"][0] -= 10
+				hover = 0
+				fac = 0
+				self.data["HUD"]["Lift"] = 0
+				self.data["HOVER"][0] = 0
 
 			self.objects["HUD"]["LG"].color[0] = 1
 			self.objects["HUD"]["LG"].color[1] = 1*(self.data["LANDFRAME"]>1)
@@ -636,6 +644,11 @@ class Starfighter(vehicle.CoreAircraft):
 		else:
 			rot = [torque[0]/100, torque[1]/100, torque[2]/100]
 			self.sendEvent("INPUT", cls, "STARFIGHTER", ROTATE=rot)
+
+		self.data["LANDSTATE"] = "FLYLOCK"
+
+		self.data["HUD"]["Power"] = 0
+		self.data["HUD"]["Lift"] = 0
 
 		self.objects["HUD"]["LG"].color[0] = 0
 		self.objects["HUD"]["LG"].color[1] = 0
