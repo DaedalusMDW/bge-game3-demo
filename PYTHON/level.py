@@ -10,6 +10,7 @@ from bge import logic, events, render, types, constraints
 from game3 import GAMEPATH, keymap, settings, config, base, player, viewport, world
 
 
+base.WORLD["CHECKPOINT_NAME"] = base.WORLD.get("CHECKPOINT_NAME", None)
 CHKPNT = settings.json.dumps(base.PROFILE)
 
 
@@ -29,6 +30,7 @@ def INIT(cont):
 					g = owner.color[1]
 					b = owner.color[2]
 					cls.env_dim = (r+1, g+1, b+1, 1)
+
 		name = base.WORLD["PLAYERS"].get("1", None)
 
 		if name != None:
@@ -38,10 +40,68 @@ def INIT(cont):
 				world.openBlend("RESUME")
 
 
-# Teleport
 def TP_COLCB(OBJ):
 	pass
 
+
+# Checkpoints
+def CHECKPOINT_SAVE(cont):
+	global CHKPNT
+	owner = cont.owner
+	name = owner.get("CHECKPOINT", cont.owner.name)
+
+	if "COLLIDE" not in owner:
+		owner["COLLIDE"] = []
+		owner.collisionCallbacks.append(TP_COLCB)
+
+	if name == base.WORLD["CHECKPOINT_NAME"] or "PLAYERS" not in base.WORLD:
+		return
+
+	cur = base.WORLD["PLAYERS"].get("1", None)
+	plr = None
+	if cur != None:
+		plr = base.PLAYER_CLASSES.get(cur, None)
+
+	for cls in owner["COLLIDE"]:
+		if plr != None and cls == plr:
+			print("CHECKPOINT SAVE", name)
+			check = []
+			for cls in logic.UPDATELIST:
+				if cls not in check:
+					cls.doUpdate()
+					check.append(cls)
+			if logic.VIEWPORT != None:
+				logic.VIEWPORT.doUpdate()
+			base.WORLD["CHECKPOINT_NAME"] = name
+			CHKPNT = settings.json.dumps(base.PROFILE)
+
+	owner["COLLIDE"] = []
+
+
+def CHECKPOINT_LOAD(cont):
+	global CHKPNT
+	owner = cont.owner
+	if "COLLIDE" not in owner:
+		owner["COLLIDE"] = []
+		owner.collisionCallbacks.append(TP_COLCB)
+
+	if "PLAYERS" not in base.WORLD:
+		return
+
+	cur = base.WORLD["PLAYERS"].get("1", None)
+	plr = None
+	if cur != None:
+		plr = base.PLAYER_CLASSES.get(cur, None)
+
+	for cls in owner["COLLIDE"]:
+		if plr != None and cls == plr:
+			logic.globalDict["PROFILES"][base.CURRENT["Profile"]] = settings.json.loads(CHKPNT)
+			world.openBlend("RESUME")
+
+	owner["COLLIDE"] = []
+
+
+# Teleport
 def TELEPORT(cont):
 
 	owner = cont.owner

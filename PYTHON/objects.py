@@ -7,6 +7,19 @@ from bge import logic
 from game3 import base, keymap, attachment, weapon, powerup, viewport
 
 
+class SceneObject(base.CoreObject):
+
+	NAME = ""
+	GHOST = False
+	INTERACT = False
+	PHYSICS = "NONE"
+
+class PhysicsObject(SceneObject):
+
+	NAME = ""
+	PHYSICS = "RIGID"
+
+
 class MachineGun(weapon.CorePlayerWeapon):
 
 	NAME = "Basic SMG"
@@ -329,13 +342,6 @@ class BasicSword(weapon.CorePlayerWeapon):
 			self.doPlayerAnim("LOOP")
 
 		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Sword")
-
-
-class PhysicsObject(base.CoreObject):
-
-	NAME = ""
-	GHOST = False
-	PHYSICS = "RIGID"
 
 
 class SmallHealth(powerup.CoreStats):
