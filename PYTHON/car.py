@@ -43,9 +43,9 @@ class ATV(vehicle.CoreCar):
 
 	def ST_Startup(self):
 		self.env_dim = None
-		self.active_post.append(self.PS_SetVisible)
+		self.active_post.append(self.PS_Ambient)
 
-	def PS_SetVisible(self):
+	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
 			amb = 0
@@ -101,9 +101,9 @@ class Buggy(vehicle.CoreCar):
 
 	def ST_Startup(self):
 		self.env_dim = None
-		self.active_post.append(self.PS_SetVisible)
+		self.active_post.append(self.PS_Ambient)
 
-	def PS_SetVisible(self):
+	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
 			amb = 0

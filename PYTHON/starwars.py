@@ -368,7 +368,7 @@ class Starfighter(vehicle.CoreAircraft):
 		self.data["GLASSFRAME"] = g
 		self.active_post.append(self.airDrag)
 		self.active_post.append(self.airLift)
-		self.active_post.append(self.PS_SetVisible)
+		self.active_post.append(self.PS_Ambient)
 		self.toggleWeapons(self.data["ATTACKMODE"])
 
 	def stateSwitch(self, state=None):
@@ -423,7 +423,7 @@ class Starfighter(vehicle.CoreAircraft):
 			self.owner.localAngularVelocity = [0,0,0]
 			self.active_state = self.ST_Active
 
-	def PS_SetVisible(self):
+	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
 			amb = 0
