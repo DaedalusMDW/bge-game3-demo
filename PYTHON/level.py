@@ -55,6 +55,7 @@ def CHECKPOINT_SAVE(cont):
 		owner.collisionCallbacks.append(TP_COLCB)
 
 	if name == base.WORLD["CHECKPOINT_NAME"] or "PLAYERS" not in base.WORLD:
+		owner["COLLIDE"] = []
 		return
 
 	cur = base.WORLD["PLAYERS"].get("1", None)
@@ -86,6 +87,7 @@ def CHECKPOINT_LOAD(cont):
 		owner.collisionCallbacks.append(TP_COLCB)
 
 	if "PLAYERS" not in base.WORLD:
+		owner["COLLIDE"] = []
 		return
 
 	cur = base.WORLD["PLAYERS"].get("1", None)
@@ -216,13 +218,21 @@ def ZONE(cont):
 		owner["ZONE"] = False
 		owner["TIMER"] = 0
 
+	cur = None
+	plr = None
+	if "PLAYERS" in base.WORLD:
+		cur = base.WORLD["PLAYERS"].get("1", None)
+		plr = None
+		if cur != None:
+			plr = base.PLAYER_CLASSES.get(cur, None)
+
 	for hit in owner["COLLIDE"]:
-		if hit.PORTAL == True:
-			vehicle = hit.data.get("PORTAL", None)
-			if vehicle == True and owner.get("VEHICLE", True) == False:
-				vehicle = False
-			if vehicle in [None, True]:
+		if getattr(hit, "PORTAL", None) == True and plr != None:
+			if hit == plr:
 				cls = hit
+			elif owner.get("VEHICLE", True) == True:
+				if plr in hit.getChildren():
+					cls = hit
 
 	if owner["TIMER"] > 120:
 		owner["TIMER"] = 200

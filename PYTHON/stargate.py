@@ -725,19 +725,28 @@ class CoreGate(base.CoreObject):
 			self.doEventHorizon("LOAD")
 			return None
 
+		cur = None
+		plr = None
+		if "PLAYERS" in base.WORLD:
+			cur = base.WORLD["PLAYERS"].get("1", None)
+			plr = None
+			if cur != None:
+				plr = base.PLAYER_CLASSES.get(cur, None)
+
 		player = None
 
-		for cls in self.puddle["COLLIDE"]:
-			if cls.PORTAL == True:
-				vehicle = cls.data.get("PORTAL", None)
-				if vehicle != False:
-					player = cls
+		for hit in self.puddle["COLLIDE"]:
+			if getattr(hit, "PORTAL", None) == True and plr != None:
+				if hit == plr:
+					player = hit
+				elif plr in hit.getChildren():
+					player = hit
 
 			nrm = self.puddle.getAxisVect([0,-1,0])
-			vec = self.puddle.getVectTo(cls.objects["Root"])[1]
+			vec = self.puddle.getVectTo(hit.owner)[1]
 			if nrm.dot(vec) < 0.01:
-				if cls not in self.back:
-					self.back.append(cls)
+				if hit not in self.back:
+					self.back.append(hit)
 
 		clr = []
 		for chk in self.back:
