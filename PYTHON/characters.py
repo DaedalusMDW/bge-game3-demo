@@ -28,6 +28,10 @@ class ActorPlayer(player.CorePlayer):
 
 		return dict
 
+	def defaultStates(self):
+		super().defaultStates()
+		self.active_post.insert(0, self.PS_Ambient)
+
 	def switchPlayerNPC(self):
 		if self.active_state != self.ST_IdleRD:
 			super().switchPlayerNPC()
@@ -54,10 +58,6 @@ class ActorPlayer(player.CorePlayer):
 
 		super().destroy()
 
-	def hideObject(self, state=None):
-		if self.dict.get("Vehicle", None) == None:
-			super().hideObject(state)
-
 	def manageStatAttr(self):
 		if self.active_state in {self.ST_Ragdoll, self.ST_IdleRD}:
 			return
@@ -79,9 +79,7 @@ class ActorPlayer(player.CorePlayer):
 
 		super().manageStatAttr()
 
-	def PS_SetVisible(self):
-		super().PS_SetVisible()
-
+	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
 			amb = 0
@@ -275,7 +273,8 @@ class ActorPlayer(player.CorePlayer):
 			self.ST_IdleRD()
 		elif self.active_state == self.ST_Ragdoll:
 			self.ST_Ragdoll()
-		self.PS_SetVisible()
+		super().ST_Freeze()
+		self.PS_Ambient()
 
 	def ST_Ragdoll(self):
 		scene = self.owner.scene
@@ -350,7 +349,7 @@ class ActorPlayer(player.CorePlayer):
 				obj.restoreDynamics()
 				obj.enableRigidBody()
 
-		self.doAnim(MODE="LOOP", BLEND=0)
+		rig.update()
 
 	def weaponLoop(self):
 		cls = self.active_weapon
@@ -548,7 +547,6 @@ class TRPlayer(ActorPlayer):
 			dist = ledge[2]
 			offset = self.EDGE_H-self.GND_H
 			wall = self.findWall()
-			print(wall)
 
 			if keymap.BINDS["PLR_JUMP"].tap() == True and angle < self.SLOPE:
 				if 2 > owner.localLinearVelocity[2] > 0 and wall == True:
@@ -752,6 +750,8 @@ class TRPlayer(ActorPlayer):
 			self.active_state = self.ST_EdgeClimb
 
 	def ST_EdgeClimb(self):
+		self.getInputs()
+
 		owner = self.objects["Root"]
 		char = self.objects["Character"]
 

@@ -22,7 +22,7 @@ def BULLET(cont):
 	if h == 100:
 		rco = owner["ROOTOBJ"]
 
-	obj, pnt, nrm = rco.rayCast(rayto, rayfrom, owner.localScale[1], "", 1, 1, 0)
+	obj, pnt, nrm = rco.rayCast(rayto, rayfrom, owner.localScale[1], "", 1, 0, 0)
 
 	if obj != None:
 		gfx = owner.scene.addObject("GFX_LaserHit", owner, 0)

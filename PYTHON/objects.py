@@ -325,7 +325,7 @@ class BasicSword(weapon.CorePlayerWeapon):
 			rfm = obj.worldPosition
 			rto = rfm+obj.getAxisVect((0,0,1))
 
-			rayOBJ, rayPNT, rayNRM = plr.getOwner().rayCast(rto, rfm, self.BLADELENGTH, "", 1, 1, 0)
+			rayOBJ, rayPNT, rayNRM = plr.getOwner().rayCast(rto, rfm, self.BLADELENGTH, "", 1, 0, 0)
 
 			if rayOBJ != None and rayOBJ not in self.hitlist:
 				rayOBJ.get("MODIFIERS", []).append({"HEALTH":-20})
@@ -341,7 +341,7 @@ class BasicSword(weapon.CorePlayerWeapon):
 		if self.getFirstEvent("WP_ANIM") != None:
 			self.doPlayerAnim("LOOP")
 
-		self.sendEvent("WEAPON", self.owning_player, "TYPE", TYPE="Sword")
+		self.sendEvent("WEAPON", plr, "TYPE", TYPE="Sword")
 
 
 class SmallHealth(powerup.CoreStats):
@@ -375,7 +375,7 @@ class SimpleKey(powerup.CoreKey):
 
 	SCALE = 0.4
 	OFFSET = (0,0,0)
-	GFXBOX = {"Mesh":"BOX_Sphere", "Scale":(0.5, 1, 0.25)}
-	GFXDROP = {"Mesh":"BOX_Sphere", "Scale":(0.5, 1, 0.25)}
+	GFXBOX = {"Mesh":"BOX_Drop", "Scale":(0.5, 1, 0.25)}
+	GFXDROP = {"Mesh":"BOX_Drop", "Scale":(0.5, 1, 0.25)}
 	LOCK = 1
 
