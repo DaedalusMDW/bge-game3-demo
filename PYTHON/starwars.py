@@ -423,6 +423,10 @@ class Starfighter(vehicle.CoreAircraft):
 			self.owner.localAngularVelocity = [0,0,0]
 			self.active_state = self.ST_Active
 
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		cls.env_dim = list(self.objects["Mesh"].color)
+
 	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
@@ -432,9 +436,6 @@ class Starfighter(vehicle.CoreAircraft):
 			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
 
 		self.objects["Mesh"].color = self.env_dim
-
-		for cls in self.getChildren():
-			cls.env_dim = self.env_dim
 
 		self.env_dim = None
 

@@ -45,6 +45,10 @@ class ATV(vehicle.CoreCar):
 		self.env_dim = None
 		self.active_post.append(self.PS_Ambient)
 
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		cls.env_dim = list(self.objects["Mesh"].color)
+
 	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
@@ -58,9 +62,6 @@ class ATV(vehicle.CoreCar):
 		for w in self.wheelobj:
 			obj = self.wheelobj[w]
 			obj.children[0].color = self.env_dim
-
-		for cls in self.getChildren():
-			cls.env_dim = self.env_dim
 
 		self.env_dim = None
 
@@ -103,6 +104,10 @@ class Buggy(vehicle.CoreCar):
 		self.env_dim = None
 		self.active_post.append(self.PS_Ambient)
 
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		cls.env_dim = list(self.objects["Mesh"].color)
+
 	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
@@ -116,9 +121,6 @@ class Buggy(vehicle.CoreCar):
 		for w in self.wheelobj:
 			obj = self.wheelobj[w]
 			obj.children[0].color = self.env_dim
-
-		for cls in self.getChildren():
-			cls.env_dim = self.env_dim
 
 		self.env_dim = None
 
