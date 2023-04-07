@@ -32,6 +32,11 @@ class ActorPlayer(player.CorePlayer):
 		super().defaultStates()
 		self.active_post.insert(0, self.PS_Ambient)
 
+	def saveWorldPos(self):
+		super().saveWorldPos()
+		if self.data["NPC_LEAD"] == True:
+			self.data["POS"] = [0,0,0]
+
 	def switchPlayerNPC(self):
 		if self.active_state != self.ST_IdleRD:
 			super().switchPlayerNPC()
@@ -176,6 +181,8 @@ class ActorPlayer(player.CorePlayer):
 
 		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
 			self.npc_leader = self.getParent()
+			owner.worldPosition = self.npc_leader.owner.worldPosition
+			owner.worldPosition += self.npc_leader.owner.worldOrientation*self.createVector(vec=(0,-0.5,0))
 
 		if self.npc_leader != None:
 			plr = self.npc_leader.owner
@@ -336,6 +343,20 @@ class ActorPlayer(player.CorePlayer):
 			self.ragdollparts["root"] = rdroot
 			self.ragdollstate = "ACTIVE"
 			newobj.endObject()
+
+		else:
+			for name in self.ragdollparts:
+				obj = self.ragdollparts[name]
+
+				#LV = obj.localLinearVelocity.copy()
+				#LV -= (obj.worldOrientation.inverted()*self.air_linv)
+				#dragX = LV[0]*0.5*obj.mass*self.air_drag
+				#dragY = LV[1]*0.5*obj.mass*self.air_drag
+				#dragZ = LV[2]*0.5*obj.mass*self.air_drag
+				#obj.applyForce((-dragX, -dragY, -dragZ), True)
+
+				obj.applyForce(-self.owner.scene.gravity*obj.mass, False)
+				obj.applyForce(self.gravity*obj.mass, False)
 
 		if base.ORIGIN_SHIFT != None:
 			self.ragdollstate = "ORIGIN"
