@@ -787,7 +787,7 @@ class Silverbird(vehicle.CoreAircraft):
 		rayto = owner.worldPosition+owner.getAxisVect((0,4,0))
 		rayfrom = owner.worldPosition #+owner.getAxisVect((0,2,0))
 
-		rayobj, raypnt, raynrm = owner.rayCast(rayto, rayfrom, dc, "", 1, 1, 0)
+		rayobj, raypnt, raynrm = owner.rayCast(rayto, rayfrom, dc, "", 1, 0, 0)
 
 		dist = None
 		if rayobj != None:

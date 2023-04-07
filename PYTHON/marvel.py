@@ -381,6 +381,9 @@ class QuinJet(vehicle.CoreAircraft):
 			g = 120
 			print("INIT DOCK")
 
+		mesh = self.objects["Mesh"]
+		mesh.color = (1,0,1,1)
+
 		self.doAnim(NAME="QJGlass", FRAME=(g,g), LAYER=1)
 		self.data["GLASSFRAME"] = g
 

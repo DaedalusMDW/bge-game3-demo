@@ -7,6 +7,7 @@ from game3 import base, world, keymap, HUD, viewport
 
 class PlanetTile(world.DynamicWorldTile):
 
+	CONTAINER = "LOCK"
 	NAME = "World Tile"
 	LOD_ACTIVE = 1500
 	LOD_FREEZE = 7000

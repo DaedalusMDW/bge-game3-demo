@@ -472,7 +472,7 @@ class Starfighter(vehicle.CoreAircraft):
 		if self.data["FLYMODE"] == 0:
 			power = force[1]*1000
 			hover = (force[2]*500)+(owner.mass*self.gravity.length)
-			fac = abs(force[1]*0.1)
+			fac = (force[1]*0.1)
 			self.data["POWER"] = 0
 
 			tqx = torque[0]*300
@@ -563,7 +563,8 @@ class Starfighter(vehicle.CoreAircraft):
 		owner.applyTorque([tqx, tqy, tqz], True)
 
 		## EXTRAS ##
-		mesh.color[0] = abs(fac)
+		mesh.color[0] = fac*(fac>0)
+		#cb = (1-abs(fac*(fac<0)))
 		mesh.color[1] += (1-mesh.color[1])*0.02
 
 		self.data["HUD"]["Power"] = abs(fac)*100
@@ -724,7 +725,7 @@ class Ahsoka(characters.TRPlayer):
 	WP_TYPE = "MELEE"
 	INVENTORY = {"Hip_L": "WP_LightSaber_A", "Hip_R": "WP_LightSaber_As"}
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
-	OFFSET = (0, 0.03, 0.16)
+	OFFSET = (0, 0.03, 0.14)
 	SPEED = 0.12
 	JUMP = 7
 	GND_H = 1.0
