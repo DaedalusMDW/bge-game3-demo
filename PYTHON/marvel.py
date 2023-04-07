@@ -4,12 +4,36 @@ from bge import logic
 
 from game3 import base, world, door, vehicle, weapon, keymap, HUD, viewport
 
-from mathutils import Vector, Matrix
+from mathutils import geometry, Vector, Matrix
 
+
+SHIPMAN = None
 
 if "MARVEL" not in base.WORLD:
 	dict = {"Object":"Zephyr1", "Data":None, "Portal":None}
 	base.WORLD["MARVEL"] = {"Ship":dict, "Dict":None, "Map":"", "Frame":0, "QJ":False}
+
+
+class LandingZone(base.CoreObject):
+
+	NAME = "Landing Zone"
+	CONTAINER = "WORLD"
+
+	def defaultData(self):
+		dict = super().defaultData()
+		dict["NAME"] = self.owner.get("NAME", self.owner.name)
+
+		return dict
+
+	def ST_Startup(self):
+		self.active_state = self.ST_Idle
+
+
+	def ST_Idle(self):
+		global SHIPMAN
+
+		if SHIPMAN != None:
+			self.sendEvent("Z1LZ", SHIPMAN, NAME=self.data["NAME"])
 
 
 class ZephyrShip(base.CoreObject):
@@ -18,7 +42,7 @@ class ZephyrShip(base.CoreObject):
 	UPDATE = "WORLD"
 
 	ANIMSET = ""
-	ANIMFRAMES = {"Depart":420, "Land":450}
+	ANIMFRAMES = {"Depart":420, "Land":450, "Zone":250}
 
 	HUDLAYOUT = HUD.LayoutCinema
 
@@ -32,6 +56,8 @@ class ZephyrShip(base.CoreObject):
 			base.WORLD["MARVEL"]["Dict"] = self.dict
 			base.WORLD["MARVEL"]["Map"] = base.CURRENT["Level"]
 			base.WORLD["MARVEL"]["CurMap"] = base.CURRENT["Level"]
+			base.WORLD["MARVEL"]["LZ"] = "HOME"
+			base.WORLD["MARVEL"]["CurLZ"] = "HOME"
 			self.active_state = self.ST_Disabled
 
 		self.dict = base.WORLD["MARVEL"]["Dict"]
@@ -40,36 +66,55 @@ class ZephyrShip(base.CoreObject):
 		super().doLoad()
 
 	def ST_Startup(self):
+		global SHIPMAN
+		if SHIPMAN == None:
+			SHIPMAN = self
+		else:
+			self.endObject()
+			return
+
 		owner = self.owner
 		scene = owner.scene
 
 		self.ship_obj = None
 		self.ship_class = None
 		self.ship_anim = None
+		self.ship_lz = None
 
 		if base.WORLD["MARVEL"]["Map"] == base.WORLD["MARVEL"]["CurMap"] == base.CURRENT["Level"]:
 			print("Zephyr Insta-Spawn")
 			self.doShipSpawn()
+		else:
+			base.WORLD["MARVEL"]["LZ"] = "HOME"
+			base.WORLD["MARVEL"]["CurLZ"] = "HOME"
 
 	def doShipSpawn(self):
 		owner = self.owner
 		scene = owner.scene
 
 		if self.ship_anim != None:
+			#if scene.active_camera == self.ship_anim.children["ZephyrCinematic.Camera"]:
+			#	self.ship_anim.children["ZephyrCinematic.Camera"].removeParent()
+			#	scene.active_camera = base.SC_CAM
 			self.ship_anim.endObject()
 			self.ship_anim = None
 
 		base.WORLD["MARVEL"]["Map"] = base.CURRENT["Level"]
 		base.WORLD["MARVEL"]["CurMap"] = base.CURRENT["Level"]
 
+		obj = owner
+		if self.ship_lz != None:
+			obj = self.ship_lz.owner
+
 		if self.ship_obj == None:
-			self.ship_obj = scene.addObject("Zephyr1", owner, 0)
+			self.ship_obj = scene.addObject("Zephyr1", obj, 0)
 			self.ship_obj["DICT"] = base.WORLD["MARVEL"]["Ship"]
 			self.ship_class = base.GETCLASS(self.ship_obj)
 
 		if base.CURRENT["Level"]+owner.name in base.PROFILE["Portal"]:
 			del base.PROFILE["Portal"][base.CURRENT["Level"]+owner.name]
 
+		self.ship_lz = None
 		self.active_state = self.ST_Disabled
 
 	def doShipCinematic(self, mode="Depart"):
@@ -82,29 +127,39 @@ class ZephyrShip(base.CoreObject):
 			self.ship_obj = None
 			print("ZEPHYR DEPART")
 
-		self.ship_anim = scene.addObject("ZephyrCinematic", owner, 0)
-		if owner.get("ANIMWORLD", False) == True:
+		obj = owner
+		if self.ship_lz != None:
+			obj = self.ship_lz.owner
+
+		self.ship_anim = scene.addObject("ZephyrCinematic", obj, 0)
+		if obj.get("ANIMWORLD", False) == True and mode != "Zone":
 			self.ship_anim.worldPosition = -base.ORIGIN_OFFSET
 			self.ship_anim.worldOrientation = self.createMatrix()
 
-		env = scene.addObject("Zephyr1", owner, 0)
+		env = scene.addObject("Zephyr1", self.ship_anim, 0)
 		env.setParent(self.ship_anim, False, False)
 
-		msh = scene.addObject("Zephyr1.Mesh", owner, 0)
+		msh = scene.addObject("Zephyr1.Mesh", env, 0)
 		msh.setParent(env, False, False)
-		#ins = scene.addObject("Zephyr1.Floors", owner, 0)
+		#ins = scene.addObject("Zephyr1.Floors", env, 0)
 		#ins.setParent(env, False, False)
-		gfx = scene.addObject("Zephyr1.GFX", owner, 0)
+		gfx = scene.addObject("Zephyr1.GFX", env, 0)
 		gfx.setParent(env, False, False)
 		if base.WORLD["MARVEL"]["QJ"] == True:
-			qjd = scene.addObject("Zephyr1.QJD", owner, 0)
+			qjd = scene.addObject("Zephyr1.QJD", env, 0)
 			qjd.setParent(env, False, False)
 
 		cam = self.ship_anim.children["ZephyrCinematic.Camera"]
 		cam.near = base.config.CAMERA_CLIP[0]
 		cam.far = base.config.CAMERA_CLIP[1]
-		name = owner.get("ANIMNAME", self.ANIMSET)
-		end = owner.get(mode.upper()+"FRAMES", self.ANIMFRAMES[mode])
+
+		if mode == "Zone":
+			name = self.ANIMSET
+			end = self.ANIMFRAMES[mode]
+		else:
+			name = obj.get("ANIMNAME", self.ANIMSET)
+			end = obj.get(mode.upper()+"FRAMES", self.ANIMFRAMES[mode])
+
 		self.doAnim(env, "Zephyr."+name+mode+"Ship", (0,end))
 		self.doAnim(cam, "Zephyr."+name+mode+"Camera", (0,end))
 		self.doAnim(gfx, "Zephyr."+name+mode+"GFX", (0,end))
@@ -136,13 +191,36 @@ class ZephyrShip(base.CoreObject):
 			base.WORLD["MARVEL"]["Frame"] -= 1
 
 	def ST_Disabled(self):
-		if base.WORLD["MARVEL"]["Map"] != base.CURRENT["Level"]:
-			if base.WORLD["MARVEL"]["CurMap"] == base.CURRENT["Level"]:
+		mvd = base.WORLD["MARVEL"]
+
+		if mvd["Map"] != base.CURRENT["Level"]:
+			if mvd["CurMap"] == base.CURRENT["Level"]:
 				self.doShipCinematic("Depart")
 
-		elif base.WORLD["MARVEL"]["Map"] == base.CURRENT["Level"]:
-			if base.WORLD["MARVEL"]["CurMap"] != base.CURRENT["Level"]:
+		elif mvd["Map"] == base.CURRENT["Level"]:
+			if mvd["CurMap"] != base.CURRENT["Level"]:
 				self.doShipCinematic("Land")
+
+		if self.ship_class != None:
+			self.sendEvent("Z1LZ", self.ship_class, NAME="HOME")
+			lz = None
+			for evt in self.getAllEvents("Z1LZ"):
+				s = evt.getProp("NAME", "")
+				self.sendEvent("Z1LZ", self.ship_class, NAME=s)
+				if mvd["LZ"] == s and mvd["CurLZ"] != s and self.ship_lz == None:
+					self.ship_lz = evt.sender
+					lz = s
+
+			if mvd["LZ"] == "HOME" and mvd["CurLZ"] != "HOME":
+				lz = "HOME"
+
+			if lz != None:
+				mvd["CurLZ"] = lz
+				self.ship_class.packObject(True, True)
+				self.ship_class = None
+				self.ship_obj = None
+				self.doShipCinematic("Zone")
+				print("ZEPHYR LZ", lz)
 
 
 class Zephyr(world.DynamicWorldTile):
@@ -174,6 +252,8 @@ class Zephyr(world.DynamicWorldTile):
 		{"POS":self.createVector(vec=(-1.5, 28, 1.5)), "R":28},
 		{"POS":self.createVector(vec=( 0.0,-15, 2.5)), "R":28}
 		]
+
+		self.lz_places = {}
 
 		dict = super().defaultData()
 		dict["DOCKED"] = "INIT"
@@ -259,15 +339,79 @@ class Zephyr(world.DynamicWorldTile):
 		## Buttons ##
 		for key in self.objects.get("Map", {}):
 			obj = self.objects["Map"][key]
-			obj.color = (0,0,0,1)
+			obj.color[0] = 0.0
 			if base.CURRENT["Level"] == (key+".blend"):
-				obj.color = (0,1,0,1)
+				obj.color[0] = 1.0
 			elif obj.get("RAYCAST", None) != None:
-				obj.color = (1,0,0,1)
+				obj.color[0] = 0.5
 				if keymap.BINDS["ACTIVATE"].tap() == True:
 					base.WORLD["MARVEL"]["Map"] = key+".blend"
 			obj["RAYCAST"] = None
 			obj["RAYNAME"] = obj.get("RAYNAME", key)
+
+		## LZ Picker ##
+		lz = self.objects["LZ"]
+		all = self.getAllEvents("Z1LZ")
+
+		chk = []
+		for evt in all:
+			name = evt.getProp("NAME", "")
+			if name not in chk:
+				chk.append(name)
+			if name not in self.lz_places:
+				pie = lz.scene.addObject("Z1LZ_Circle", lz, 0)
+				pie.setParent(lz, False, False)
+				self.lz_places[name] = pie
+
+			pie = self.lz_places[name]
+			pie["LZ"] = evt.sender
+			pie["NAME"] = name
+
+		for key in self.lz_places:
+			if key not in chk:
+				self.lz_places[key].endObject()
+				del self.lz_places[key]
+
+		x = len(chk)
+		if x < 1:
+			lz["RAYCAST"] = None
+			lz["RAYNAME"] = ""
+			return
+
+		chk.sort()
+		chk.remove("HOME")
+		chk.insert(0, "HOME")
+
+		ang = None
+		loc = None
+		if lz.get("RAYCAST", None) != None:
+			plr = lz["RAYCAST"]
+			fr = plr.rayhit[1]
+			to = fr+plr.rayvec
+			hit = geometry.intersect_line_plane(fr, to, lz.worldPosition, lz.getAxisVect((0,1,0)))
+			loc = self.getLocalSpace(lz, hit)
+
+		lz["RAYNAME"] = ""
+
+		for i in range(x):
+			obj = self.lz_places[chk[i]]
+			f = i/x
+			obj.localOrientation = self.createMatrix(rot=(0,f*360,0), deg=True)
+			obj.color[0] = (1/x)*0.95
+			obj.color[1] = 0.0
+			if base.WORLD["MARVEL"]["LZ"] == obj["NAME"]:
+				obj.color[1] = 1.0
+			if loc != None and 0.2 < loc.length < 0.7:
+				ref = obj.localOrientation*Vector((0,0,1))
+				ang = ref.angle(loc, None)
+				ang = self.toDeg(ang)
+				if ang != None and ang < 360*(0.5/x):
+					obj.color[1] += 0.5
+					lz["RAYNAME"] = obj["NAME"]
+					if keymap.BINDS["ACTIVATE"].tap() == True:
+						base.WORLD["MARVEL"]["LZ"] = obj["NAME"]
+
+		lz["RAYCAST"] = None
 
 	def PS_DoorGrav(self):
 		objlist = self.objects["Container"]
