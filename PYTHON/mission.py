@@ -51,8 +51,10 @@ class SwitchPlayer(CoreMission):
 
 		name = owner.get("PLAYER", "Actor")
 		name = self.data.get("CHAR_NAME", name)
+		anim = owner.get("ACTION", "Jumping")
 
 		self.data["CHAR_NAME"] = name
+		self.data["IDLE_ANIM"] = anim
 
 		self.chars = {"CUR":None, "NEW":None, "PID":None}
 
@@ -70,6 +72,8 @@ class SwitchPlayer(CoreMission):
 			self.chars["CUR"].localPosition = self.createVector()
 			self.chars["CUR"].localOrientation = self.createMatrix()
 
+			cls.doAnim(NAME=cls.ANIMSET+anim, FRAME=(0,0))
+
 			self.objects["Root"]["RAYNAME"] = cls.NAME
 			self.active_state = self.ST_Disabled
 		else:
@@ -84,26 +88,43 @@ class SwitchPlayer(CoreMission):
 
 	def ST_Active_Set(self):
 		owner = self.objects["Root"]
-		cls = owner["RAYCAST"]
+		plr = owner["RAYCAST"]
 
-		if cls == None or self.chars["CUR"] == None:
+		if plr == None or self.chars["CUR"] == None:
 			return
 
-		self.chars["NEW"] = cls.objects["Character"]
+		self.chars["NEW"] = plr.objects["Character"]
 
-		self.chars["PID"] = cls.switchPlayerPassive()
+		self.chars["PID"] = plr.switchPlayerPassive()
 
-		cls.setContainerParent(self)
+		plr.setContainerParent(self)
 
 		self.chars["NEW"].worldPosition = self.objects["New"].worldPosition.copy()
 		self.chars["NEW"].worldOrientation = self.objects["New"].worldOrientation.copy()
 		self.chars["NEW"].setVisible(True, True)
 
+		plr.doAnim(NAME=plr.ANIMSET+"Jumping", FRAME=(0,0))
+
 		self.objects["Cam"].near = base.config.CAMERA_CLIP[0]
 		self.objects["Cam"].far = base.config.CAMERA_CLIP[1]
 		owner.scene.active_camera = self.objects["Cam"]
 
-		self.data["HUD"]["Subtitles"] = SUB_SWITCH.get(self.chars["CUR"].name, None)
+		nc = self.chars["CUR"].name
+		nn = self.chars["NEW"].name
+		s = subtitles.SWITCH.get(nc, None)
+		s = subtitles.SWITCH.get(nc+nn, s)
+
+		self.data["HUD"]["Subtitles"] = s
+
+		a = "Jumping"
+		f = (0,0)
+
+		if s != None:
+			a = s.get("ACTION", a)
+			f = s.get("FRAMES", f)
+
+		cls = self.chars["CUR"]["Class"]
+		cls.doAnim(NAME=cls.ANIMSET+a, FRAME=f)
 
 		HUD.SetLayout(self)
 
@@ -124,11 +145,17 @@ class SwitchPlayer(CoreMission):
 	def ST_Disabled_Set(self):
 		owner = self.objects["Root"]
 
+		plr = self.chars["CUR"]["Class"]
+		plr.doAnim(NAME=plr.ANIMSET+"Jumping", FRAME=(0,0))
+
+		cls = self.chars["NEW"]["Class"]
+		cls.doAnim(NAME=cls.ANIMSET+self.data["IDLE_ANIM"], FRAME=(0,0))
+
 		self.chars["CUR"].worldPosition = self.objects["New"].worldPosition.copy()
 		self.chars["CUR"].worldOrientation = self.objects["New"].worldOrientation.copy()
 
-		self.chars["CUR"]["Class"].removeContainerParent()
-		self.chars["CUR"]["Class"].switchPlayerActive(self.chars["PID"])
+		plr.removeContainerParent()
+		plr.switchPlayerActive(self.chars["PID"])
 
 		viewport.loadCamera()
 
