@@ -10,7 +10,7 @@ SUB_NAMES = {
 }
 
 SUB_SWITCH = {
-	"Actor": {"NAME":"Actor", "LINE":"<PLACEHOLDER>", "TIME":60},
+	"Actor": {"NAME":"Actor", "LINE":"<PLACEHOLDER>", "TIME":90, "ACTION":"EmoteWave", "FRAMES":(0,120)},
 	"Ahsoka": {"NAME":"Ahsoka", "LINE":"Time to see a jedi in action!", "TIME":60}
 }
 
@@ -52,6 +52,7 @@ class SwitchPlayer(CoreMission):
 		name = owner.get("PLAYER", "Actor")
 		name = self.data.get("CHAR_NAME", name)
 		anim = owner.get("ACTION", "Jumping")
+		anim = self.data.get("IDLE_ANIM", anim)
 
 		self.data["CHAR_NAME"] = name
 		self.data["IDLE_ANIM"] = anim
@@ -111,8 +112,8 @@ class SwitchPlayer(CoreMission):
 
 		nc = self.chars["CUR"].name
 		nn = self.chars["NEW"].name
-		s = subtitles.SWITCH.get(nc, None)
-		s = subtitles.SWITCH.get(nc+nn, s)
+		s = SUB_SWITCH.get(nc, None)
+		s = SUB_SWITCH.get(nc+nn, s)
 
 		self.data["HUD"]["Subtitles"] = s
 
