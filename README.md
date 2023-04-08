@@ -21,6 +21,8 @@ There is a continually expanding collection of example content to provide a vari
   - navmesh with obstacles
 - LavaPits
   - by completion, level one of what im hoping will evolve into its own game.  to be used as a feedback on mechanics.
+- TileCity
+  - a simpler demo of container streaming
 ### Assets
 - Zephyr Ship
   - this project was originally called the "Zephyr Demo" showcasing container streaming and persistance data being passed across game world data
@@ -28,7 +30,7 @@ There is a continually expanding collection of example content to provide a vari
 - Vehicles
   - jets, atvs, cars, etc
 - Player characters
-  - you can change character by entering the name of the blender object in the map select ui
+  - you can change character in the characters menu.  green highlight is the active player, select again to reset to default.
 - Attachments/Usables
   - guns, jetpacks, hats and things
 
