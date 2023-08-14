@@ -37,6 +37,9 @@ class PlanetTile(world.DynamicWorldTile):
 		cls.air_drag = cls.gravity.length/9.8
 		cls.env_dim = (ac[0]+1, ac[1]+1, ac[2]+1, 1.0)
 
+		wp = self.owner.worldPosition+self.owner.getAxisVect((0,0,self.space_planet))+base.ORIGIN_OFFSET
+		cls.sendEvent("COMPASS", cls, "NORTH", POS=wp)
+
 	def checkCoords(self, cls):
 		if cls.CONTAINER == "LOCK" or cls == self:
 			return None
@@ -65,5 +68,42 @@ class LavaPlanetTile(PlanetTile):
 		if dt > 1:
 			dt = 1
 		dt = dt**2
+		return dt
+
+
+class PlanetWorld(PlanetTile):
+
+	def getLodLevel(self):
+		return "ACTIVE"
+
+	def applyContainerProps(self, cls):
+		dvec = cls.getOwner().worldPosition-self.owner.worldPosition
+		svec = self.owner.worldPosition+base.ORIGIN_OFFSET
+		dist = dvec.length
+		obco = self.owner.color
+
+		mx = 1
+		dt = self.getEnvMix(dvec, svec)
+		ac = self.createVector(vec=(obco[0], obco[1], obco[2]))*mx*dt
+
+		cls.gravity = dvec.normalized()*-9.8
+		cls.air_drag = cls.gravity.length/9.8
+		cls.env_dim = (ac[0]+1, ac[1]+1, ac[2]+1, 1.0)
+
+		wp = self.owner.worldPosition+self.owner.getAxisVect((0,0,50000))+base.ORIGIN_OFFSET
+		cls.sendEvent("COMPASS", cls, "NORTH", POS=wp)
+
+	def checkCoords(self, cls):
+		if cls.CONTAINER == "LOCK" or cls == self:
+			return None
+
+		return True
+
+	def getEnvMix(self, dvec, svec):
+		dt = (svec.normalized().dot(-dvec.normalized())*1.0)+0.5
+		if dt < 0:
+			dt = 0
+		if dt > 1:
+			dt = 1
 		return dt
 

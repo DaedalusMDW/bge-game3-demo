@@ -19,6 +19,9 @@ class PhysicsObject(SceneObject):
 	NAME = ""
 	PHYSICS = "RIGID"
 
+	def ST_Startup(self):
+		self.addCollisionCallBack()
+
 
 class MachineGun(weapon.CorePlayerWeapon):
 
