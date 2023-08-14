@@ -42,11 +42,12 @@ class Gateship(vehicle.CoreAircraft):
 
 	CAM_TYPE = "FIRST"
 	CAM_ORBIT = 1
-	CAM_RANGE = (16, 24)
-	CAM_ZOOM = 2
+	CAM_RANGE = (10, 25)
+	CAM_ZOOM = 1
+	CAM_STEPS = 3
 	CAM_HEIGHT = 0.1
 	CAM_MIN = 1.0
-	CAM_SLOW = 1.5
+	CAM_SLOW = 3.0
 	CAM_HEAD_G = 0
 	CAM_OFFSET = (0,0,1)
 
@@ -73,7 +74,9 @@ class Gateship(vehicle.CoreAircraft):
 		"Seat_B": {"NAME":"Ramp",    "DOOR":"Door_1", "CAMERA":[0,0,0], "VISIBLE":False, "SPAWN":[0,-6,-0.3], "STATE":"WALKING"},
 		"DHD":    {"NAME":"DHD",     "DOOR":"DHD",    "CAMERA":[0,2.3,0.5], "VISIBLE":False, "SPAWN":[0,0,0], "STATE":"DHD"},
 		"Seat_1": {"NAME":"Pilot",   "DOOR":"Seat_1", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"DRIVER"},
-		"Seat_2": {"NAME":"CoPilot", "DOOR":"Seat_2", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"}
+		"Seat_2": {"NAME":"CoPilot", "DOOR":"Seat_2", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"},
+		"Seat_3": {"NAME":"Support", "DOOR":"Seat_3", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"},
+		"Seat_4": {"NAME":"Support", "DOOR":"Seat_4", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"}
 		}
 
 	AERO = {"POWER":20000, "REVERSE":1.0, "HOVER":0, "LIFT":0, "TAIL":0, "DRAG":(1,1,1)}
@@ -283,18 +286,6 @@ class Gateship(vehicle.CoreAircraft):
 			obj.localPosition = pos
 			obj.localOrientation = ori
 
-		if self.stargate == None:
-			if self.STARGATE["Gate"] != None:
-				self.stargate = self.STARGATE["Gate"]["Data"]
-
-				for key in self.objects["DHD_Keys"]:
-					obj = self.objects["DHD_Keys"][key]
-					obj.color[0] = 0
-					if key in self.stargate["ADDRESS"]:
-						obj.color[0] = 1
-				if "1P" in self.stargate["ADDRESS"]:
-					self.objects["DHD_Keys"]["Button"].color[0] = 1
-
 	def ST_Idle(self):
 		if self.checkClicked() == True:
 			self.stateSwitch()
@@ -333,21 +324,19 @@ class Gateship(vehicle.CoreAircraft):
 		rayfrom = viewport.getObject("Rotate").worldPosition
 		rvec = owner.worldOrientation.inverted()*viewport.getRayVec()
 		x = 180
-		obj = None
-		for key in ["Seat_1", "Seat_2", "Seat_3", "Seat_4", "Door_1", "DHD"]:
-			rayto = self.objects[key].worldPosition
+		key = None
+		for i in ["Seat_1", "Seat_2", "Seat_3", "Seat_4", "Door_1", "DHD"]:
+			obj = self.objects[i]
+			rayto = obj.worldPosition
 			tvec = owner.worldOrientation.inverted()*(rayto-rayfrom)
 			angle = self.toDeg(rvec.angle(tvec))
 			if angle < 30 and angle < x and tvec.length < 2:
-				obj = self.objects[key]
-				self.data["HUD"]["Text"] = obj.get("RAYNAME", key)
+				key = i
+				self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
 				self.data["HUD"]["Color"] = (0,1,0,1)
 				x = angle
 
-		if obj != None and "RAYCAST" in obj:
-			obj["RAYCAST"] = self.player_seats[self.driving_seat]
-
-		if obj == self.objects["Door_1"]:
+		if key == "Door_1":
 			exit = (MOVE[1]<-0.1 and self.data["WALK"]<=-3)
 			if keymap.BINDS["ACTIVATE"].tap() == True:
 				if self.data["DOORSTATE"] != "OPEN":
@@ -357,7 +346,8 @@ class Gateship(vehicle.CoreAircraft):
 			if self.data["DOORSTATE"] == "OPEN" and exit == True:
 				self.stateSwitch("IDLE")
 
-		elif self.checkClicked() == True:
+		elif key != None and keymap.BINDS["ACTIVATE"].tap() == True:
+			self.attachToSeat(self.player_seats[self.driving_seat], key)
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
 			self.stateSwitch()
@@ -380,21 +370,20 @@ class Gateship(vehicle.CoreAircraft):
 		rayfrom = viewport.getObject("Rotate").worldPosition
 		rvec = owner.worldOrientation.inverted()*viewport.getRayVec()
 		x = 180
-		obj = None
-		for key in ["Seat_1", "Seat_2"]:
-			rayto = self.objects[key].worldPosition
+		key = None
+		for i in ["Seat_1", "Seat_2"]:
+			obj = self.objects[i]
+			rayto = obj.worldPosition
 			tvec = owner.worldOrientation.inverted()*(rayto-rayfrom)
 			angle = self.toDeg(rvec.angle(tvec))
 			if angle < 30 and angle < x:
-				obj = self.objects[key]
-				self.data["HUD"]["Text"] = obj.get("RAYNAME", key)
+				key = i
+				self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
 				self.data["HUD"]["Color"] = (0,1,0,1)
 				x = angle
 
-		if obj != None and "RAYCAST" in obj:
-			obj["RAYCAST"] = self.player_seats[self.driving_seat]
-
-		if self.checkClicked() == True:
+		if key != None and keymap.BINDS["ACTIVATE"].tap() == True:
+			self.attachToSeat(self.player_seats[self.driving_seat], key)
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
 			self.stateSwitch()
@@ -427,15 +416,13 @@ class Gateship(vehicle.CoreAircraft):
 		if obj != None and exit == False:
 			self.objects["DHD_Keys"][obj].color[0] += 0.5
 
-		#if "1P" in self.stargate["ADDRESS"]:
-		#	self.objects["DHD_Keys"]["Button"].color[0] = 1
-
 		if obj != None and keymap.BINDS["ACTIVATE"].tap() == True:
 			if obj == "Button":
 				if self.stargate["DIAL"] == False and "1P" in self.stargate["ADDRESS"]:
 					self.stargate["DIAL"] = True
 				else:
 					self.stargate["ADDRESS"] = []
+
 			elif self.stargate["DIAL"] == False:
 				if self.objects["DHD_Keys"][obj]["ACTIVE"] == True and len(self.stargate["ADDRESS"]) < 9:
 					self.stargate["ADDRESS"].append(obj)
