@@ -688,6 +688,231 @@ class Starfighter(vehicle.CoreAircraft):
 			mesh.color[1] = 0
 			self.stateSwitch("IDLE")
 
+class SpeederHUD(HUD.CoreHUD):
+
+	OBJECT = "Aircraft"
+
+	def ST_Startup(self):
+		self.old_power = 0
+		self.old_lift = 0
+		self.owner.setVisible(False,True)
+		self.objects["Mesh"].visible = True
+		self.objects["Power"].visible = True
+		self.objects["Lift"].visible = True
+
+	def ST_Active(self, plr):
+		root = plr.objects["Root"]
+
+		## Power ##
+		power = plr.data["HUD"].get("Power", 0)*0.2
+		self.old_power += (power-self.old_power)*0.5
+		self.objects["Power"].localOrientation = self.createMatrix(rot=[0,0,self.old_power], deg=True)
+
+		## Lift ##
+		lift = plr.data["HUD"].get("Lift", 0)
+		self.old_lift += (lift-self.old_lift)*0.5
+		self.objects["Lift"].color[0] = ((self.old_lift/100)*0.75)
+
+
+class LayoutSpeeder(HUD.HUDLayout):
+
+	GROUP = "Core"
+	MODULES = [HUD.Stats, SpeederHUD, HUD.MousePos, HUD.Compass]
+
+
+class LandSpeeder(vehicle.CoreAircraft):
+
+	NAME = "Land Speeder"
+	HUDLAYOUT = LayoutSpeeder
+
+	CAM_ORBIT = True
+	MOUSE_CENTER = True
+	#MOUSE_SCALE = [1000,1]
+
+	INVENTORY = {"Cannon_L":"WP_LaserCannon", "Cannon_R":"WP_LaserCannon"}
+	SLOTS = {}
+
+	VEH_HEIGHT = 0.8
+	VEH_DAMPING = 0
+
+	WHEELS = {}
+
+	SEATS = {
+		"Seat_1": {"NAME":"Driver", "DOOR":"Root", "CAMERA":[0,0,0.6], "ACTION":"SeatSpeeder", "VISIBLE":True, "SPAWN":[-1,0,0]} }
+
+	AERO = {"POWER":500, "REVERSE":0.5, "HOVER":0, "LIFT":0, "TAIL":0, "DRAG":(1, 0, 0)}
+
+	def defaultData(self):
+		self.lift = 0
+
+		dict = super().defaultData()
+		dict["ATTACKMODE"] = True
+		dict["COOLDOWN"] = 0
+		dict["HARDPOINT"] = "R"
+
+		return dict
+
+	def applyModifier(self, dict):
+		if "HEALTH" in dict:
+			dict["HEALTH"] *= 0.5
+		super().applyModifier(dict)
+
+	def gravRepulsor(self):
+		dampLin = 0.5
+		dampRot = 0.8
+
+		self.owner.setDamping(dampLin, dampRot)
+
+		self.doDragForce()
+
+		## Align To Ground ##
+		if self.gravity.length >= 0.1:
+			self.doRepulsor()
+
+	def doRepulsor(self):
+		owner = self.objects["Root"]
+
+		linv = owner.worldLinearVelocity*(1/60)
+
+		wght = self.gravity.length*owner.mass
+		zref = self.gravity.normalized()
+		href = (self.VEH_HEIGHT*2)+(linv.length*2)
+		orgn = owner.worldPosition+(zref*0.3)+(linv*2)
+
+		hover = self.createVector()
+		align = -zref
+
+		rayfrom = orgn
+		rayto = orgn+zref
+		zfac = 0
+
+		down, pnt, nrm = owner.rayCast(rayto, rayfrom, href*2, "GROUND", 1, 1, 0)
+
+		if down != None:
+			dist = (orgn-pnt)
+
+			if dist.length < href:
+				zfac = (href-dist.length)
+
+			upvec = -zref
+			hover = upvec*(zfac*wght)
+
+			angle = upvec.angle(nrm, 0)
+			angle = round(self.toDeg(angle), 2)
+			if angle < 50:
+				align = nrm
+
+		self.gndnrm = self.gndnrm.slerp(align, 0.03)
+
+		tval = self.motion["Torque"][2]*-0.5*linv.length
+		if owner.localLinearVelocity[1] < 0:
+			tval = -tval
+
+		self.gndtilt += (tval-self.gndtilt)*0.02
+
+		ori = owner.worldOrientation
+		mat = base.mathutils.Matrix.OrthoProjection(self.gndnrm, 3)
+
+		xref = mat*owner.getAxisVect([1,-0.5*self.gndtilt,0])
+		tilt = xref.normalized()*self.gndtilt
+
+		#self.gimbal.worldPosition = owner.worldPosition+tilt
+		#self.gimbal.worldOrientation = ori
+
+		align = (self.gndnrm+tilt).normalized()
+		owner.alignAxisToVect(align, 2, 1.0)
+
+		owner.applyForce(owner.getAxisVect([0,0,1])*hover.length, False)
+
+		self.data["HUD"]["Lift"] = zfac*50
+
+	def toggleWeapons(self, state=None):
+		if state == None:
+			self.data["ATTACKMODE"] ^= True
+		elif state == True:
+			self.data["ATTACKMODE"] = True
+		else:
+			self.data["ATTACKMODE"] = False
+
+		for slot in ["Cannon_L", "Cannon_R"]:
+			cls = self.getSlotChild(slot)
+			cls.stateSwitch(state=self.data["ATTACKMODE"])
+
+	def fireWeapons(self):
+		slot = "Cannon_"+self.data["HARDPOINT"]
+
+		self.sendEvent("WP_FIRE", self.getSlotChild(slot), SCALE=(1.5,4,1.5), COLOR=(0,1,0,1))
+
+		if self.data["HARDPOINT"] == "R":
+			self.data["HARDPOINT"] = "L"
+			self.data["COOLDOWN"] = 5
+		else:
+			self.data["HARDPOINT"] = "R"
+			self.data["COOLDOWN"] = 15
+
+	def ST_Startup(self):
+		#self.gimbal = self.owner.scene.addObject("Gimbal", self.owner, 0)
+		self.gndtilt = 0
+		self.gndnrm = self.createVector(vec=(0,0,1))
+		self.active_pre.append(self.gravRepulsor)
+		self.toggleWeapons(self.data["ATTACKMODE"])
+
+	## ACTIVE STATE ##
+	def ST_Active(self):
+		self.getInputs()
+
+		owner = self.objects["Root"]
+
+		force = self.motion["Force"]
+		torque = self.motion["Torque"]
+		linV = owner.localLinearVelocity
+
+		## FORCES ##
+		power, hover = self.getEngineForce()
+
+		fac = self.data["POWER"]/self.AERO["POWER"]
+		mx = abs(linV.length)
+
+		yaw = -torque[1]+torque[2]
+		if yaw < -1:
+			yaw = -1
+		if yaw > 1:
+			yaw = 1
+
+		tqz = self.gndnrm*yaw*15
+
+		owner.applyTorque(tqz, False)
+		owner.applyForce([0.0, power-(linV[1]*5*fac), 0], True)
+
+		## EXTRAS ##
+		mesh = self.objects["Fire"]
+		mesh.color[0] = fac*(fac>0)
+		mesh.color[1] += (1-mesh.color[1])*0.02
+
+		self.data["HUD"]["Power"] = abs(fac)*100
+
+		## WEAPONS ##
+		if keymap.BINDS["SHEATH"].tap() == True:
+			self.toggleWeapons()
+
+		if self.data["ATTACKMODE"] == True:
+			if self.data["COOLDOWN"] == 0:
+				if keymap.BINDS["ATTACK_ONE"].active() == True:
+					self.fireWeapons()
+			else:
+				self.data["COOLDOWN"] -= 1
+
+		if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
+			self.data["COOLDOWN"] = 10
+			self.stateSwitch("IDLE")
+
+	def ST_Idle(self):
+		mesh = self.objects["Fire"]
+		mesh.color[1] += (0-mesh.color[1])*0.02
+
+		if self.checkClicked() == True:
+			self.stateSwitch()
+
 
 class LaserCannon(weapon.CoreWeapon):
 
