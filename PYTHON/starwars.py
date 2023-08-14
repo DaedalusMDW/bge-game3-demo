@@ -1258,6 +1258,159 @@ class Ahsoka(characters.TRPlayer):
 				weap["ACTIVE"] = "ACTIVE"
 
 
+class BattleDroid(characters.ActorPlayer):
+
+	NAME = "Battledroid"
+	CLASS = "Standard"
+	WP_TYPE = "RANGED"
+	ANIMSET = "Droid"
+	OFFSET = (0, 0.07, 0.1)
+
+	HAND = {"MAIN":"Hand_R", "OFF":"Hand_L"}
+	SLOTS = {"FIVE":"Back", "ONE":"Shoulder_R"}
+
+	INVENTORY = {"Shoulder_R": "WP_LaserGun"}
+
+	SPEED = 0.04
+	ACCEL = 10
+	ACCEL_FAST = 10
+	ACCEL_STOP = 10
+	JUMP = 1
+	EYE_H = 1.7
+	CAM_MIN = 0.3
+	CAM_TYPE = "THIRD"
+
+	def applyModifier(self, dict):
+		if "HEALTH" in dict:
+			dict["HEALTH"] *= 5
+		super().applyModifier(dict)
+
+	def doPlayerOnGround(self):
+		owner = self.objects["Root"]
+		char = self.objects["Character"]
+
+		move = self.motion["Move"].normalized()
+		mx = 0.035
+
+		vref = viewport.getDirection((move[0], move[1], 0))
+		self.doMovement(vref, mx)
+		self.doMoveAlign(up=False)
+
+		linLV = self.motion["Local"].copy()
+		linLV[2] = 0
+		action = "IDLE"
+
+		if linLV.length > 0.01:
+			action = "FORWARD"
+
+			if linLV[1] < 0:
+				action = "BACKWARD"
+			if linLV[0] > 0.5 and abs(linLV[1]) < 0.5:
+				action = "STRAFE_R"
+			if linLV[0] < -0.5 and abs(linLV[1]) < 0.5:
+				action = "STRAFE_L"
+
+			action = "WALK_"+action
+
+		self.doPlayerAnim(action, blend=10)
+
+	def ST_Idle(self):
+		scene = base.SC_SCN
+		owner = self.objects["Root"]
+		char = self.owner
+
+		self.gposoffset = owner.getAxisVect((0,0,1))*self.GND_H
+		ground, angle = self.checkGround()
+
+		owner.setDamping(0, 0)
+
+		vref = owner.getAxisVect((0,0,0))
+		mx = 0
+
+		## MOVEMENT ##
+		if ground != None:
+			if self.jump_state != "NONE":
+				self.jump_timer = 0
+				self.jump_state = "NONE"
+				vel = self.motion["World"]*(1/60)
+				self.resetAcceleration(vel)
+				self.doPlayerAnim("LAND")
+
+			owner.worldLinearVelocity = (0,0,0)
+
+			self.doMovement(vref, mx)
+			self.doMoveAlign(axis=vref, up=False)
+
+			linLV = self.motion["Local"].copy()
+			linLV[2] = 0
+			action = "IDLE"
+
+			if linLV.length > 0.01:
+				action = "FORWARD"
+
+				if linLV[1] < 0:
+					action = "BACKWARD"
+				if linLV[0] > 0.5 and abs(linLV[1]) < 0.5:
+					action = "STRAFE_R"
+				if linLV[0] < -0.5 and abs(linLV[1]) < 0.5:
+					action = "STRAFE_L"
+
+				action = "WALK_"+action
+
+			self.doPlayerAnim(action, blend=10)
+
+		elif self.jump_state == "NONE":
+			self.doJump(height=1, move=0.5)
+
+		else:
+			self.jump_state = "FALLING"
+			self.jump_timer += 1
+
+			axis = owner.worldLinearVelocity*(1/60)*0.1
+			self.doMoveAlign(axis, up=False, margin=0.001)
+			self.doPlayerAnim("FALLING")
+
+			owner.applyForce(vref*5, False)
+
+		self.alignToGravity()
+
+		## WEAPONS ##
+		weap = self.data["WPDATA"]
+
+		pri = self.getSlotChild("Shoulder_R")
+
+		if pri == None:
+			weap["CURRENT"] = "NONE"
+			weap["ACTIVE"] = "NONE"
+			self.active_weapon = None
+			return
+		else:
+			weap["ACTIVE"] = "ACTIVE"
+
+		weap["CURRENT"] = "RANGED"
+
+		dict = weap["WHEEL"][weap["CURRENT"]]
+		dict["ID"] = 0
+
+		if weap["ACTIVE"] == "ACTIVE":
+			R = pri.stateSwitch(True)
+			self.active_weapon = pri
+
+			y = char.getAxisVect((0,1,0))
+			x = char.getAxisVect((1,0,0))
+
+			self.sendEvent("WP_HAND", pri, "MAIN")
+			self.sendEvent("WP_ANIM", pri)
+			self.sendEvent("WP_VEC", pri, VEC=y, UP=x)
+
+			if R == True:
+				self.sendEvent("WP_FIRE", pri, "PRIMARY", COLOR=(1,0,0,1))
+
+		elif weap["ACTIVE"] == "NONE":
+			pri.stateSwitch(False)
+			self.active_weapon = None
+
+
 class LaserGun(weapon.CorePlayerWeapon):
 
 	NAME = "Yup, its a gun -_-"
@@ -1299,9 +1452,13 @@ class LaserGun(weapon.CorePlayerWeapon):
 		owner = self.owner
 		plr = self.owning_player
 		plrobj = plr.objects["Root"]
+		if plrobj == None:
+			#plr.doAnim(LAYER=1, STOP=True)
+			return
 		vec = viewport.getRayVec()
-		#if plr.rayhit != None:
-		#	vec = (plr.rayhit[1]-owner.worldPosition).normalized()
+		evt = self.getFirstEvent("WP_VEC")
+		if evt != None:
+			vec = evt.getProp("VEC", vec)
 
 		self.data["HUD"]["Text"] = "Rockets: "+str(self.data["ROCKETS"])
 		self.data["HUD"]["Stat"] = 100*(self.data["ROCKETS"]>0)
@@ -1370,8 +1527,14 @@ class LaserGun(weapon.CorePlayerWeapon):
 			self.data["STRAFE"] = plr.data["STRAFE"]
 		plr.data["STRAFE"] = True
 
+		fw = plrobj.getAxisVect((0,1,0))
 		hrz = plrobj.getAxisVect((0,0,1))
 		ang = self.toDeg(vec.angle(hrz))/180
+		if vec.dot(fw) < 0:
+			if vec.dot(hrz) > 0:
+				ang = 0
+			else:
+				ang = 1
 
 		hand = plr.HAND.get(self.data["HAND"], "").split("_")
 		if len(hand) > 1:
@@ -1380,7 +1543,8 @@ class LaserGun(weapon.CorePlayerWeapon):
 			plr.doAnim(LAYER=1, SET=ang*20)
 
 		up = viewport.VIEWCLASS.objects["Rotate"].getAxisVect((1,0,0))
-		fw = plrobj.getAxisVect((0,1,0))
+		if evt != None:
+			up = evt.getProp("UP", up)
 
 		if fw.dot(vec) > 0.5 and vec.length > 0.01:
 			self.objects["Mesh"].alignAxisToVect(vec.normalized(), 1, 1.0)
