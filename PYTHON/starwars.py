@@ -969,6 +969,7 @@ class Ahsoka(characters.TRPlayer):
 		self.active_post.insert(0, self.PS_Abilities)
 
 	def defaultData(self):
+		self.shield = None
 		dict = super().defaultData()
 		dict["ATTACKCHAIN"] = "NONE"
 
@@ -1086,6 +1087,28 @@ class Ahsoka(characters.TRPlayer):
 			self.doCrouch(True)
 
 	def PS_Abilities(self):
+		char = self.owner
+		scene = char.scene
+
+		if self.data["ATTACKCHAIN"] == "BLOCK":
+			if self.shield == None or self.shield.invalid == True:
+				self.shield = scene.addObject("GFX_SaberBlock", char, 0)
+				self.shield.setParent(char, False, False)
+				self.shield.localPosition = (0,1,0)
+
+			if self.data["COOLDOWN"] > 0:
+				self.shield.alignAxisToVect(char.getAxisVect((0,1,0)), 1, 1.0)
+			else:
+				rndx = (logic.getRandomFloat()-0.5)
+				rndy = (logic.getRandomFloat()-0.5)
+				rvec = char.getAxisVect((rndx,1,rndy)).normalized()
+
+				self.shield.alignAxisToVect(rvec, 1, 1.0)
+		else:
+			if self.shield != None:
+				self.shield.endObject()
+				self.shield = None
+
 		owner = self.objects["Root"]
 		if owner == None:
 			return
@@ -1118,7 +1141,16 @@ class Ahsoka(characters.TRPlayer):
 
 		anim = self.ANIMSET+"MeleeAttack"
 
-		if self.data["COOLDOWN"] <= 0:
+		if self.data["ATTACKCHAIN"] == "BLOCK":
+			if self.data["COOLDOWN"] <= 0:
+				self.data["COOLDOWN"] = 0
+			else:
+				self.data["COOLDOWN"] -= 1
+
+			if keymap.BINDS["ATTACK_TWO"].active() == False:
+				self.data["ATTACKCHAIN"] = "NONE"
+
+		elif self.data["COOLDOWN"] <= 0:
 			self.sendEvent("WP_CLEAR", pri)
 			self.sendEvent("WP_CLEAR", sec)
 
@@ -1133,21 +1165,16 @@ class Ahsoka(characters.TRPlayer):
 				#else:
 					#
 
-			elif self.data["ATTACKCHAIN"] == "BLOCK":
-				self.addModifier(SHIELD=self.data["ENERGY"])
-				if keymap.BINDS["ATTACK_TWO"].active() == False:
-					self.data["ATTACKCHAIN"] = "NONE"
-
 			elif keymap.BINDS["ATTACK_TWO"].active() == True:
 				self.doAnim(STOP=True, LAYER=0)
 				self.doAnim(STOP=True, LAYER=1)
-				self.data["COOLDOWN"] = 0
+				self.data["COOLDOWN"] = 60
 				self.data["ATTACKCHAIN"] = "BLOCK"
 
 			elif move.length > 0.01 and keymap.BINDS["ATTACK_ONE"].tap() == True:
 				if abs(move[0]) < abs(move[1]):
 					if move[1] > 0.01:
-						self.doAnim(NAME=anim+"Fast", FRAME=(0,35), LAYER=1, PRIORITY=0, BLEND=0)
+						self.doAnim(NAME=anim+"Fast", FRAME=(0,50), LAYER=1, PRIORITY=0, BLEND=0)
 						self.data["COOLDOWN"] = 35
 						self.data["ATTACKCHAIN"] = "FORWARD_ONE"
 					if move[1] < -0.01 and linLV.length < 2.5:
@@ -1506,7 +1533,7 @@ class LaserGun(weapon.CorePlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 15.0
+				ammo["DAMAGE"] = 20.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, sy, sz)
 				ammo.color = (1,1,1,1)
@@ -1516,7 +1543,7 @@ class LaserGun(weapon.CorePlayerWeapon):
 				gfx.setParent(self.objects["Barrel"], False, False)
 				gfx.localScale = (1.0, 1.0, 1.0)
 				gfx.children[0].color = (1,1,1,1)
-				self.data["COOLDOWN"] = 10
+				self.data["COOLDOWN"] = 20
 
 		else:
 			self.data["COOLDOWN"] -= 1
