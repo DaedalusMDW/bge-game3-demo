@@ -46,6 +46,7 @@ class ActorPlayer(player.CorePlayer):
 	def applyModifier(self, dict):
 		if "IMPULSE" in dict:
 			self.jump_state = "JUMP"
+			self.npc_state = -1
 
 		super().applyModifier(dict)
 
@@ -67,20 +68,26 @@ class ActorPlayer(player.CorePlayer):
 		if self.active_state in {self.ST_Ragdoll, self.ST_IdleRD}:
 			return
 
-		if self.data["HEALTH"] < 0 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
+		if self.data["HEALTH"] <= 0:
 			self.data["HEALTH"] = -1
-			if self.objects["Root"] != None:
-				self.motion["World"] = self.objects["Root"].worldLinearVelocity.copy()
-			else:
-				self.motion["World"] = self.createVector()
 
 			if self.data["NPC_LEAD"] == True:
 				self.removeContainerParent()
 				self.npc_leader = None
 				self.data["NPC_LEAD"] = False
 
-			print("RD WV", self.motion["World"])
-			self.active_state = self.ST_Ragdoll
+			if ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
+				if self.objects["Root"] != None:
+					self.motion["World"] = self.objects["Root"].worldLinearVelocity.copy()
+				else:
+					self.motion["World"] = self.createVector()
+
+				print("RD WV", self.motion["World"])
+				self.doAnim(STOP=True)
+				self.active_state = self.ST_Ragdoll
+
+			elif self.player_id == None:
+				self.endObject()
 
 		super().manageStatAttr()
 
@@ -118,8 +125,9 @@ class ActorPlayer(player.CorePlayer):
 			if evt != None and self.npc_state >= 0:
 				self.npc_state += 1
 
-			if self.npc_state > 30:
-				self.npc_state = -2
+			if self.npc_state > 30 or self.npc_state == -1:
+				if self.npc_state != -1:
+					self.npc_state = -2
 				for name in self.ragdollparts:
 					obj = self.ragdollparts[name]
 					obj["DESTROY"] = True
@@ -129,7 +137,7 @@ class ActorPlayer(player.CorePlayer):
 				return
 			elif evt == None:
 				if self.npc_state >= 1:
-					self.npc_state = -1
+					self.npc_state = -2
 				else:
 					self.npc_state = 0
 
@@ -202,7 +210,7 @@ class ActorPlayer(player.CorePlayer):
 
 			if act != None and self.npc_state >= 0:
 				self.npc_state += 1
-			else:
+			elif self.npc_state != -1:
 				self.npc_state = 0
 
 			if self.npc_state > 30:
@@ -309,16 +317,15 @@ class ActorPlayer(player.CorePlayer):
 			rdroot.worldOrientation = self.objects["RagdollHelper"].worldOrientation.copy()
 
 			for obj in list(rdroot.childrenRecursive):
-				name = obj.name.split(".")
-				if len(name) == 2:
-					print(name[1], obj.parent)
+				bn = obj.get("BONE", None)
+				if bn != None:
 					obj["Class"] = self
 					obj["TARGET"] = obj.parent
 					obj.removeParent()
 					obj.worldLinearVelocity = (0,0,0)
 					obj.worldAngularVelocity = (0,0,0)
 					obj.suspendDynamics()
-					self.ragdollparts[name[1]] = obj
+					self.ragdollparts[bn] = obj
 
 			char.setParent(rdroot, False, False)
 
@@ -371,7 +378,8 @@ class ActorPlayer(player.CorePlayer):
 				obj.restoreDynamics()
 				obj.enableRigidBody()
 
-		rig.update()
+		self.doAnim(MODE="LOOP", BLEND=0)
+		#rig.update()
 
 	def weaponLoop(self):
 		cls = self.active_weapon
