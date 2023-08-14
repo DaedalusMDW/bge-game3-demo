@@ -33,17 +33,10 @@ def BULLET(cont):
 		gfx.localScale = (s,s,s)
 		gfx.children[0].color = owner.color
 
-		mods = obj.get("MODIFIERS", None)
-		v = obj.get("SHIELD", 0)
-		if "Class" in obj:
-			v = 0
-		dmg = owner["DAMAGE"]
+		cls = obj.get("Class", None)
 
-		if mods != None:
-			v = 0
-			for dict in mods:
-				v = dict.get("SHIELD", v)
-				break
+		v = obj.get("SHIELD", 0)
+		dmg = owner["DAMAGE"]
 
 		if h >= 0:
 			s = dmg
@@ -58,16 +51,18 @@ def BULLET(cont):
 				owner["HEALTH"] = h-50
 			else:
 				s -= dmg
+				owner["HEALTH"] = -1
 
-			if mods != None:
-				mods.append({"HEALTH":-dmg, "DEFENSE":s, "POS":list(pnt), "VEC":list(fwd)})
+			if cls != None:
+				cls.sendEvent("MODIFIERS", HEALTH=-dmg, POS=list(pnt), VEC=list(fwd), IMPULSE=dmg/4)
 
 		if dmg > 0:
 			if obj.getPhysicsId() != 0:
-				obj.applyImpulse(pnt, owner.getAxisVect([0,dmg,0]), False)
-			if mods != None:
-				mods.append({"IMPULSE":dmg})
+				obj.applyImpulse(pnt, owner.getAxisVect([0,dmg/4,0]), False)
+			if cls != None:
+				cls.sendEvent("IMPULSE")
 
+		if h < 0:
 			owner.endObject()
 
 	else:
@@ -152,12 +147,20 @@ def MISSILE(cont):
 def GRENADE(cont):
 	owner = cont.owner
 	scene = owner.scene
+
+	if owner["ROOTOBJ"].invalid == True:
+		owner["ROOTOBJ"] = owner
+
 	rayfrom = owner.worldPosition.copy()
 	rayto = rayfrom+owner.getAxisVect([0,1,0])
+
 	obj, pnt, nrm = owner.rayCast(rayto, rayfrom, 0.5, "", 1, 0, 0)
+
 	if obj != None and owner["ROOTOBJ"] != obj:
-		if "MODIFIERS" in obj:
-			obj["MODIFIERS"].append({"HEALTH":-40})
+		cls = obj.get("Class", None)
+		if cls != None:
+			cls.sendEvent("MODIFIERS", HEALTH=-40, IMPULSE=1)
+			cls.sendEvent("IMPULSE")
 		owner["TIME"] = -1
 
 	if owner["TIME"] <= 0:
@@ -165,7 +168,7 @@ def GRENADE(cont):
 		bom.localScale = (3, 3, 3)
 		bom.color = (1,0.8,0,1)
 		bom["DAMAGE"] = 40.0
-		bom["IMPULSE"] = 4.0
+		bom["IMPULSE"] = 8.0
 		owner.endObject()
 
 	owner["TIME"] -= 1
@@ -199,12 +202,13 @@ def BOMB(cont):
 			pnt = obj.worldPosition+(rnd*0.1)
 			dst = obj.worldPosition-owner.worldPosition
 			fac = (1-(dst.length*(1/owner.localScale.length)))**2
-			vec = dst.normalized()*(logic.getRandomFloat()+1)*imp
-			if obj.isSuspendDynamics == False:
-				obj.applyImpulse(pnt, vec+owner.getAxisVect([0,0,imp*0.2]), False)
-			if "MODIFIERS" in obj:
-				obj["MODIFIERS"].append({"HEALTH":-dmg*fac, "POS":list(owner.worldPosition), "VEC":list(vec)})
-				obj["MODIFIERS"].append({"IMPULSE":vec.length})
+			vec = dst.normalized()*(logic.getRandomFloat()+1)*imp*fac
+			if obj.mass > 0.01 and obj.isSuspendDynamics == False:
+				obj.applyImpulse(pnt, vec, False)
+			cls = obj.get("Class", None)
+			if cls != None:
+				cls.sendEvent("MODIFIERS", HEALTH=-dmg*fac, POS=list(owner.worldPosition), VEC=list(vec) , IMPULSE=vec.length)
+				cls.sendEvent("IMPULSE")
 			owner["HITLIST"].append(obj)
 
 	if dur <= 0:
