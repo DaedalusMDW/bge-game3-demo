@@ -290,6 +290,8 @@ class Zephyr(world.DynamicWorldTile):
 		scene = owner.scene
 		self.active_post.append(self.PS_DoorGrav)
 
+		self.objects["Sensor"]["COLLIDE"] = []
+
 	def ST_Disabled(self):
 		## LODS ##
 		lod = self.getLodLevel()
@@ -313,14 +315,10 @@ class Zephyr(world.DynamicWorldTile):
 
 		## Docking ##
 		if self.data["DOCKED"] == "NONE":
-			rayto = self.objects["Guide"].worldPosition.copy()
-			rayfrom = rayto+self.owner.getAxisVect([0,0,6])
+			for cls in self.objects["Sensor"]["COLLIDE"]:
+				self.sendEvent("DOCKING", cls, "ZEPHYR", GUIDE=self.objects["Guide"], TRACK=self.objects["Sensor"])
 
-			rayobj, raypnt, raynrm = self.owner.rayCast(rayto, rayfrom, 7, "", 1, 0, 0)
-
-			if rayobj != None:
-				cls = rayobj.get("Class", None)
-				self.sendEvent("DOCKING", cls, "ZEPHYR", GUIDE=self.objects["Guide"])
+			self.objects["Sensor"]["COLLIDE"] = []
 
 			evt = self.getFirstEvent("DOCKING", "QUINJET", "DOCKING")
 			if evt != None:
@@ -367,7 +365,7 @@ class Zephyr(world.DynamicWorldTile):
 			pie["LZ"] = evt.sender
 			pie["NAME"] = name
 
-		for key in self.lz_places:
+		for key in self.lz_places.keys():
 			if key not in chk:
 				self.lz_places[key].endObject()
 				del self.lz_places[key]
@@ -728,32 +726,43 @@ class QuinJet(vehicle.CoreAircraft):
 		evt = self.getFirstEvent("DOCKING", "ZEPHYR")
 		if evt != None:
 			pos = evt.getProp("GUIDE")
-			if pos != None:
-				self.doDragForce([10,10,10])
-				self.data["HOVER"][0] = 1000
+			trk = evt.getProp("TRACK")
+			if pos != None and trk != None:
+				vec = trk.worldPosition-owner.worldPosition
+				if vec.length > 2:
+					exit = "FLY"
+				else:
+					exit = "DOCK"
 
-				fw = pos.getAxisVect([0,1,0])
-				up = -self.gravity.normalized() #pos.getAxisVect([0,0,1])
-				vec = (pos.worldPosition+(up*3))-owner.worldPosition
-				owner.worldPosition += vec*0.01
-				owner.alignAxisToVect(fw, 1, 0.02)
-				owner.alignAxisToVect(up, 2, 0.05)
-				self.sendEvent("DOCKING", evt.sender, "QUINJET")
-				self.data["LANDSTATE"] = "FLY"
+					self.doDragForce([10,10,10])
+					self.data["HOVER"][0] = 1000
 
-				if keymap.BINDS["ENTERVEH"].tap() == True:
-					self.docking_point = self.getTransformDiff(pos)
-					self.stateSwitch("DOCK")
-					self.setContainerParent(evt.sender, "Dock")
-					self.sendEvent("DOCKING", evt.sender, "QUINJET", "DOCKING")
-					owner.localPosition = self.docking_point[0]
-					owner.localOrientation = self.docking_point[1]
+					fw = trk.getAxisVect([0,1,0])
+					up = trk.getAxisVect([0,0,1])
 
-		elif keymap.BINDS["ENTERVEH"].tap() == True and exit == True:
-			self.stateSwitch("EXIT")
+					owner.worldPosition += vec*0.01
+					owner.alignAxisToVect(fw, 1, 0.02)
+					owner.alignAxisToVect(up, 2, 0.05)
 
-		elif keymap.BINDS["TOGGLEMODE"].tap() == True and self.data["LANDSTATE"] == "FLY":
-			self.stateSwitch("CRUISE")
+					self.sendEvent("DOCKING", evt.sender, "QUINJET")
+					self.data["LANDSTATE"] = "FLY"
+
+		if exit == "DOCK":
+			if keymap.BINDS["ENTERVEH"].tap() == True:
+				self.docking_point = self.getTransformDiff(pos)
+				self.stateSwitch("DOCK")
+				self.setContainerParent(evt.sender, "Dock")
+				self.sendEvent("DOCKING", evt.sender, "QUINJET", "DOCKING")
+				owner.localPosition = self.docking_point[0]
+				owner.localOrientation = self.docking_point[1]
+
+		elif exit == True:
+			if keymap.BINDS["ENTERVEH"].tap() == True:
+				self.stateSwitch("EXIT")
+
+		elif exit in [False, "FLY"] and self.data["LANDSTATE"] == "FLY":
+			if keymap.BINDS["TOGGLEMODE"].tap() == True:
+				self.stateSwitch("CRUISE")
 
 	def ST_Idle(self):
 		self.setWheelBrake(1, "REAR")
@@ -780,7 +789,7 @@ class QuinJet(vehicle.CoreAircraft):
 			g = -60
 			if self.data["GLASSFRAME"] < 60:
 				fac = (1/120)
-				self.owner.localPosition += self.createVector(vec=(0,0,3*fac))
+				self.owner.localPosition += self.createVector(vec=(0,-2*fac,3*fac))
 				ref = self.owner.localOrientation
 				ori = self.createMatrix(rot=(-5*fac,0,0), deg=True)
 				self.owner.localOrientation = ref*ori
