@@ -128,13 +128,15 @@ class ZephyrShip(base.CoreObject):
 			print("ZEPHYR DEPART")
 
 		obj = owner
-		if self.ship_lz != None:
-			obj = self.ship_lz.owner
 
 		self.ship_anim = scene.addObject("ZephyrCinematic", obj, 0)
-		if obj.get("ANIMWORLD", False) == True and mode != "Zone":
+		if obj.get("ANIMWORLD", False) == True and mode != "Zone" and scene.active_camera == base.SC_CAM:
 			self.ship_anim.worldPosition = -base.ORIGIN_OFFSET
 			self.ship_anim.worldOrientation = self.createMatrix()
+		elif self.ship_lz != None:
+			obj = self.ship_lz.owner
+			self.ship_anim.worldPosition = obj.worldPosition.copy()
+			self.ship_anim.worldOrientation = obj.worldOrientation.copy()
 
 		env = scene.addObject("Zephyr1", self.ship_anim, 0)
 		env.setParent(self.ship_anim, False, False)
@@ -153,12 +155,15 @@ class ZephyrShip(base.CoreObject):
 		cam.near = base.config.CAMERA_CLIP[0]
 		cam.far = base.config.CAMERA_CLIP[1]
 
-		if mode == "Zone":
-			name = self.ANIMSET
-			end = self.ANIMFRAMES[mode]
-		else:
-			name = obj.get("ANIMNAME", self.ANIMSET)
-			end = obj.get(mode.upper()+"FRAMES", self.ANIMFRAMES[mode])
+		name = self.ANIMSET
+		end = self.ANIMFRAMES[mode]
+
+		if scene.active_camera == base.SC_CAM:
+			scene.active_camera = cam
+
+			if mode != "Zone":
+				name = obj.get("ANIMNAME", name)
+				end = obj.get(mode.upper()+"FRAMES", end)
 
 		self.doAnim(env, "Zephyr."+name+mode+"Ship", (0,end))
 		self.doAnim(cam, "Zephyr."+name+mode+"Camera", (0,end))
@@ -166,9 +171,6 @@ class ZephyrShip(base.CoreObject):
 
 		base.WORLD["MARVEL"]["CurMap"] = ""
 		base.WORLD["MARVEL"]["Frame"] = end
-
-		if scene.active_camera == base.SC_CAM:
-			scene.active_camera = cam
 
 		self.active_state = self.ST_Active
 
@@ -191,20 +193,16 @@ class ZephyrShip(base.CoreObject):
 			base.WORLD["MARVEL"]["Frame"] -= 1
 
 	def ST_Disabled(self):
+		lvl = base.CURRENT["Level"]
 		mvd = base.WORLD["MARVEL"]
 
-		if mvd["Map"] != base.CURRENT["Level"]:
-			if mvd["CurMap"] == base.CURRENT["Level"]:
-				self.doShipCinematic("Depart")
-
-		elif mvd["Map"] == base.CURRENT["Level"]:
-			if mvd["CurMap"] != base.CURRENT["Level"]:
-				self.doShipCinematic("Land")
-
+		all = self.getAllEvents("Z1LZ")
+		lz = None
+		dp = None
 		if self.ship_class != None:
 			self.sendEvent("Z1LZ", self.ship_class, NAME="HOME")
-			lz = None
-			for evt in self.getAllEvents("Z1LZ"):
+
+			for evt in all:
 				s = evt.getProp("NAME", "")
 				self.sendEvent("Z1LZ", self.ship_class, NAME=s)
 				if mvd["LZ"] == s and mvd["CurLZ"] != s and self.ship_lz == None:
@@ -214,13 +212,31 @@ class ZephyrShip(base.CoreObject):
 			if mvd["LZ"] == "HOME" and mvd["CurLZ"] != "HOME":
 				lz = "HOME"
 
-			if lz != None:
-				mvd["CurLZ"] = lz
-				self.ship_class.packObject(True, True)
-				self.ship_class = None
-				self.ship_obj = None
-				self.doShipCinematic("Zone")
-				print("ZEPHYR LZ", lz)
+		for evt in all:
+			s = evt.getProp("NAME", "")
+			if mvd["CurLZ"] == s:
+				dp = evt.sender
+
+		if lz != None:
+			mvd["CurLZ"] = lz
+			self.ship_class.packObject(True, True)
+			self.ship_class = None
+			self.ship_obj = None
+			self.doShipCinematic("Zone")
+			print("ZEPHYR LZ", lz)
+
+		elif mvd["Map"] != lvl and mvd["CurMap"] == lvl:
+			if mvd["CurLZ"] != "HOME":
+				self.ship_lz = dp
+			self.doShipCinematic("Depart")
+
+		elif mvd["Map"] == lvl and mvd["CurMap"] != lvl:
+			if mvd["CurLZ"] != "HOME":
+				self.ship_lz = dp
+			self.doShipCinematic("Land")
+
+		else:
+			self.ship_lz = None
 
 
 class Zephyr(world.DynamicWorldTile):
