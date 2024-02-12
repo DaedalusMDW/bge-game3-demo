@@ -948,7 +948,7 @@ class Ahsoka(characters.TRPlayer):
 	NAME = 'Ahsoka "Snips" Tano'
 	CLASS = "Light"
 	WP_TYPE = "MELEE"
-	INVENTORY = {"Hip_L": "WP_LightSaber_A", "Hip_R": "WP_LightSaber_As"}
+	INVENTORY = {"LS_L": "WP_LightSaber_A", "LS_R": "WP_LightSaber_As"}
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
 	OFFSET = (0, 0.03, 0.14)
 	SPEED = 0.12
@@ -970,6 +970,7 @@ class Ahsoka(characters.TRPlayer):
 
 	def defaultData(self):
 		self.shield = None
+		self.target = None
 		dict = super().defaultData()
 		dict["ATTACKCHAIN"] = "NONE"
 
@@ -999,6 +1000,14 @@ class Ahsoka(characters.TRPlayer):
 				self.doAnim(NAME=self.ANIMSET+"MeleeAttack", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
 			else:
 				self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			self.lastaction = [action, 0]
+
+		elif action == "CHARGE":
+			self.doAnim(NAME=self.ANIMSET+"Charge", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
+			self.lastaction = [action, 0]
+
+		elif action == "FORCE":
+			self.doAnim(NAME=self.ANIMSET+"MeleeBlock", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=blend)
 			self.lastaction = [action, 0]
 
 		elif action == "BLOCK":
@@ -1056,15 +1065,31 @@ class Ahsoka(characters.TRPlayer):
 		else:
 			mx = self.data["SPEED"]
 
+		if self.data["ENERGY"] > 1 and attack != "BLOCK" and ac != "PLACE":
+			if keymap.BINDS["PLR_JUMP"].active() == True:
+				if self.jump_timer >= 1:
+					self.jump_timer += 1
+					self.data["ENERGY"] -= 0.3
+					mx *= 1+(self.jump_timer*0.01)
+				else:
+					self.jump_timer = 0
+			elif self.jump_timer < 1:
+				self.jump_timer = 1
+		else:
+			self.jump_timer = 0
+
 		vref = viewport.getDirection((move[0], move[1], 0))
 		self.doMovement(vref, mx)
 		self.doMoveAlign(up=False)
 
 		action = "IDLE"
+		if self.jump_timer >= 2:
+			action = "CHARGE"
 
 		if attack == "BLOCK":
 			action = "BLOCK"
-
+		elif attack == "PLACE_FORCE":
+			action = "FORCE"
 		elif linLV.length > 0.1 and ac not in ["STAND", "PLACE"]:
 			action = "FORWARD"
 
@@ -1081,49 +1106,105 @@ class Ahsoka(characters.TRPlayer):
 		self.doPlayerAnim(action, blend=10)
 
 		## Jump/Crouch ##
-		if keymap.BINDS["PLR_JUMP"].tap() == True:
-			self.doJump(height=3.0, move=1.0, align=True)
-		elif keymap.BINDS["PLR_DUCK"].active() == True:
+		if self.jump_timer >= 2:
+			if keymap.BINDS["PLR_JUMP"].active() == False or self.jump_timer >= 100:
+				j = 3.0+(self.jump_timer*0.1)
+				self.doJump(height=j, move=1.0, align=True)
+		elif keymap.BINDS["PLR_DUCK"].active() == True and ac != "PLACE":
 			self.doCrouch(True)
 
 	def PS_Abilities(self):
 		char = self.owner
 		scene = char.scene
 
+		owner = self.objects["Root"]
+		if owner == None:
+			return
+
+		move = self.motion["Move"].normalized()
+		climb = self.motion["Climb"]
+
+		if self.active_weapon == None and self.data["ATTACKCHAIN"] in ["NONE", "PLACE_FORCE"]:
+			if keymap.BINDS["ATTACK_TWO"].active() == True:
+				self.data["STRAFE"] = True
+				#self.data["CAMERA"]["FOV"] = 70
+				self.data["ATTACKCHAIN"] = "PLACE_FORCE"
+				if self.raycls != None and self.rayhit != None:
+					if keymap.BINDS["ATTACK_ONE"].active() == True and self.data["ENERGY"] > 1:
+						cls = self.raycls
+						obj = self.rayhit[0]
+						grav = cls.gravity
+						self.sendEvent("MODIFIERS", cls, IMPULSE=grav.length)
+						if obj.getPhysicsId() != 0:
+							obj.applyForce(-grav*obj.mass, False)
+							vref = viewport.getDirection((move[0], move[1], climb*0.5))*1
+							obj.applyForce(vref*obj.mass, False)
+							wv = obj.worldLinearVelocity*0.5
+							obj.applyForce(-wv*obj.mass, False)
+							mx = (vref+(-grav*0.2)).length*0.05
+							self.data["ENERGY"] -= (0.0+mx)*(1+(obj.mass*0.15))
+			else:
+				self.data["ATTACKCHAIN"] = "NONE"
+				#self.data["CAMERA"]["FOV"] = self.CAM_FOV
+
 		if self.data["ATTACKCHAIN"] == "BLOCK":
+			#self.data["CAMERA"]["FOV"] = self.CAM_FOV
+
 			if self.shield == None or self.shield.invalid == True:
 				self.shield = scene.addObject("GFX_SaberBlock", char, 0)
-				self.shield.setParent(char, False, False)
+				self.shield.setParent(owner, False, False)
 				self.shield.localPosition = (0,1,0)
+				self.shield["SHIELD"] = 100
+
+			owner["SHIELD"] = 100
+			if self.rayvec != None and self.data["COOLDOWN"] > 0:
+				owner["BLOCK"] = -self.rayvec
+			elif "BLOCK" in owner:
+				del owner["BLOCK"]
 
 			if self.data["COOLDOWN"] > 0:
 				self.shield.alignAxisToVect(char.getAxisVect((0,1,0)), 1, 1.0)
 			else:
 				rndx = (logic.getRandomFloat()-0.5)
 				rndy = (logic.getRandomFloat()-0.5)
-				rvec = char.getAxisVect((rndx,1,rndy)).normalized()
-
+				rvec = char.getAxisVect((rndx,4,rndy)).normalized()
 				self.shield.alignAxisToVect(rvec, 1, 1.0)
+
 		else:
+			owner["SHIELD"] = 0
 			if self.shield != None:
+				self.shield.removeParent()
 				self.shield.endObject()
 				self.shield = None
 
-		owner = self.objects["Root"]
-		if owner == None:
-			return
+		move = self.motion["Move"].normalized()
+		vref = viewport.getDirection((move[0], move[1], 0))
 
-		tx = 120
-		if self.jump_state == "A_JUMP" and self.gravity.length > 1:
-			if self.data["ENERGY"] > 5 and self.jump_timer < tx:
-				vec = self.gravity.normalized()
-				mx = (tx-self.jump_timer)/tx
-				owner.applyForce(-vec*mx*15, False)
-				self.data["ENERGY"] -= 0.4
+		if self.jump_state in ["A_JUMP", "B_JUMP"]:
+			if self.data["ENERGY"] < 1:
+				mx = 0
+				self.data["ENERGY"] = 0.5
+			elif owner.localLinearVelocity[2] < 0:
+				mx = -owner.localLinearVelocity[2]*0.1
+				self.data["ENERGY"] -= 0.2
+			else:
+				mx = 0.5
+				self.data["ENERGY"] -= 0.1
+
+			owner.applyForce(vref*2, False)
+			owner.applyForce(-self.gravity*mx, False)
+
+		#tx = 120
+		#if self.jump_state == "A_JUMP" and self.gravity.length > 1:
+		#	if self.data["ENERGY"] > 5 and self.jump_timer < tx:
+		#		vec = self.gravity.normalized()
+		#		mx = (tx-self.jump_timer)/tx
+		#		owner.applyForce(-vec*mx*15, False)
+		#		self.data["ENERGY"] -= 0.4
 
 	def weaponLoop(self):
-		pri = self.getSlotChild("Hip_L")
-		sec = self.getSlotChild("Hip_R")
+		pri = self.getSlotChild("LS_L")
+		sec = self.getSlotChild("LS_R")
 		move = self.motion["Move"]
 		linLV = self.motion["Local"].copy()
 		linLV[2] = 0
@@ -1230,8 +1311,8 @@ class Ahsoka(characters.TRPlayer):
 			self.active_weapon = None
 			return
 
-		pri = self.getSlotChild("Hip_L")
-		sec = self.getSlotChild("Hip_R")
+		pri = self.getSlotChild("LS_L")
+		sec = self.getSlotChild("LS_R")
 
 		self.data["STRAFE"] = False
 
@@ -1393,8 +1474,8 @@ class BattleDroid(characters.ActorPlayer):
 			self.jump_state = "FALLING"
 			self.jump_timer += 1
 
-			axis = owner.worldLinearVelocity*(1/60)*0.1
-			self.doMoveAlign(axis, up=False, margin=0.001)
+			#axis = owner.worldLinearVelocity*(1/60)*0.1
+			#self.doMoveAlign(axis, up=False, margin=0.001)
 			self.doPlayerAnim("FALLING")
 
 			owner.applyForce(vref*5, False)
@@ -1583,6 +1664,7 @@ class LaserGun(weapon.CorePlayerWeapon):
 class Lightsaber(objects.BasicSword):
 
 	NAME = "Lightsaber"
+	SLOTS = ["LS_L", "LS_R", "Hip_L", "Hip_R"]
 	HAND = "AUTO"
 	WAIT = 30
 	SCALE = 0.7
@@ -1657,7 +1739,7 @@ class LightsaberV(Lightsaber):
 class LightsaberYs(Lightsaber):
 
 	NAME = "Ahsoka's Other Lightsaber"
-	SLOTS = ["Hip_R"]
+	SLOTS = ["LS_R"]
 	HAND = "OFF"
 	BLADECOLOR = (1,1,0,1)
 	BLADETYPE = "GFX_LightSaber.BladeToon"
@@ -1666,7 +1748,7 @@ class LightsaberYs(Lightsaber):
 class LightsaberG(Lightsaber):
 
 	NAME = "Ahsoka's Lightsaber"
-	SLOTS = ["Hip_L"]
+	SLOTS = ["LS_L"]
 	HAND = "MAIN"
 	BLADECOLOR = (0,1,0,1)
 	BLADETYPE = "GFX_LightSaber.BladeToon"
