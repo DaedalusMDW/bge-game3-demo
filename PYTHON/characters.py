@@ -38,6 +38,7 @@ class ActorPlayer(player.CorePlayer):
 			self.data["POS"] = [0,0,0]
 
 	def switchPlayerNPC(self):
+		self.npc_state = -2
 		if self.active_state != self.ST_IdleRD:
 			super().switchPlayerNPC()
 		elif self.active_state != self.ST_Ragdoll:
@@ -115,14 +116,22 @@ class ActorPlayer(player.CorePlayer):
 		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
 			self.npc_leader = self.getParent()
 
+		all = self.getAllEvents("INTERACT", "SEND")
+		for evt in all:
+			self.sendEvent("INTERACT", evt.sender, "RECEIVE")
+
 		if self.npc_leader != None:
 			plr = self.npc_leader.owner
 			pos = char.worldPosition-plr.worldPosition
 			pos = plr.worldOrientation.inverted()*pos
 
-			evt = self.getFirstEvent("INTERACT", "ACTOR")
+			act = self.getFirstEvent("INTERACT", "ACTOR")
+			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 
-			if evt != None and self.npc_state >= 0:
+			if evt != None and self.npc_state == -2:
+				self.npc_state = 0
+
+			if act != None and self.npc_state >= 0:
 				self.npc_state += 1
 
 			if self.npc_state > 30 or self.npc_state == -1:
@@ -135,10 +144,8 @@ class ActorPlayer(player.CorePlayer):
 				self.ragdollstate = "INIT"
 				self.switchPlayerNPC()
 				return
-			elif evt == None:
-				if self.npc_state >= 1:
-					self.npc_state = -2
-				else:
+			elif act == None:
+				if self.npc_state >= 0:
 					self.npc_state = 0
 
 		else:
@@ -175,7 +182,7 @@ class ActorPlayer(player.CorePlayer):
 					obj.applyTorque((tx*obj.mass*1, 0, 0), True)
 
 			obj.applyForce(-obj.worldLinearVelocity*obj.mass, False)
-			obj.applyForce(-self.owner.scene.gravity*obj.mass, False)
+			obj.applyForce(-self.gravity*obj.mass, False)
 
 	def ST_Idle(self):
 		scene = base.SC_SCN
@@ -192,34 +199,34 @@ class ActorPlayer(player.CorePlayer):
 			owner.worldPosition = self.npc_leader.owner.worldPosition
 			owner.worldPosition += self.npc_leader.owner.worldOrientation*self.createVector(vec=(0,-0.5,0))
 
+		all = self.getAllEvents("INTERACT", "SEND")
+		for evt in all:
+			self.sendEvent("INTERACT", evt.sender, "RECEIVE")
+
 		if self.npc_leader != None:
 			plr = self.npc_leader.owner
 			vec = plr.worldPosition-char.worldPosition
 			vref = vec.normalized()
 
-			mx = (vec.length-1.5)/20
-			if abs(vec.length-1.5) < 0.5:
-				mx = 0
-			if mx < -0.035:
-				mx = -0.035
-			if mx > self.data["SPEED"]:
-				mx = self.data["SPEED"]
-
 			act = self.getFirstEvent("INTERACT", "ACTOR")
 			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 
-			if act != None and self.npc_state >= 0:
-				self.npc_state += 1
-			elif self.npc_state != -1:
+			if evt != None and self.npc_state == -2:
 				self.npc_state = 0
 
-			if self.npc_state > 30:
+			if act == None and self.npc_state >= 1:
+				self.npc_state = -1
+
+			if self.npc_state >= 0:
+				if act != None:
+					self.npc_state += 1
+				else:
+					self.npc_state = 0
+
+			if self.npc_state > 30 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
 				self.npc_state = -2
 				self.active_state = self.ST_IdleRD
 				return
-
-			if evt != None and self.npc_state >= 0:
-				self.npc_state = -1
 
 			if self.npc_state == -1 or vec.length > 10 or self.getParent().dict.get("Vehicle", None) != None:
 				self.removeContainerParent()
@@ -228,14 +235,21 @@ class ActorPlayer(player.CorePlayer):
 				self.data["NPC_LEAD"] = False
 
 		else:
-			vref = owner.getAxisVect((0,0,0))
-			mx = 0
+			plr = None
+			vec = self.createVector()
+			vref = self.createVector()
+
+			act = self.getFirstEvent("INTERACT", "ACTOR")
 			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 			if evt != None:
 				self.setContainerParent(evt.sender)
 				self.npc_leader = evt.sender
 				self.npc_state = -2
 				self.data["NPC_LEAD"] = True
+			if act == None:
+				all = self.getAllEvents("SWITCHER", "SEND")
+				for evt in all:
+					self.sendEvent("SWITCHER", evt.sender, "RECEIVE")
 
 		if ground != None:
 			if self.jump_state != "NONE":
@@ -246,6 +260,14 @@ class ActorPlayer(player.CorePlayer):
 				self.doPlayerAnim("LAND")
 
 			owner.worldLinearVelocity = (0,0,0)
+
+			mx = 0
+			if plr != None and abs(vec.length-1.5) > 0.5:
+				mx = (vec.length-1.5)/20
+			if mx < -0.035:
+				mx = -0.035
+			if mx > self.data["SPEED"]:
+				mx = self.data["SPEED"]
 
 			self.doMovement(vref, mx)
 			self.doMoveAlign(axis=vref, up=False)
@@ -269,6 +291,18 @@ class ActorPlayer(player.CorePlayer):
 
 			self.doPlayerAnim(action, blend=10)
 
+		elif self.gravity.length <= 0.1:
+			self.doPlayerAnim("FALLING")
+			self.jump_state = "FLOATED"
+
+			mx = 0
+			if plr != None:
+				mx = (vec.length-2)
+				self.doMoveAlign(axis=vref, up=plr.getAxisVect((0,0,1)))
+
+			owner.applyForce(owner.worldLinearVelocity*-2, False)
+			owner.applyForce(vref*5*mx, False)
+
 		elif self.jump_state == "NONE":
 			self.doJump(height=1, move=0.5)
 
@@ -276,11 +310,15 @@ class ActorPlayer(player.CorePlayer):
 			self.jump_state = "FALLING"
 			self.jump_timer += 1
 
+			mx = 0
+			if vec.length > 0.1:
+				mx = (vec.length-2)
+
 			axis = owner.worldLinearVelocity*(1/60)*0.1
 			self.doMoveAlign(axis, up=False, margin=0.001)
 			self.doPlayerAnim("FALLING")
 
-			owner.applyForce(vref*5, False)
+			owner.applyForce(vref*5*mx, False)
 
 		self.alignToGravity()
 
@@ -503,7 +541,7 @@ class TRPlayer(ActorPlayer):
 
 	def PS_Edge(self):
 		owner = self.objects["Root"]
-		if owner == None:
+		if owner == None or self.player_id == None:
 			return
 
 		#if owner.get("XX", None) == None:
