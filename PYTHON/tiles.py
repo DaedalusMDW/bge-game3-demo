@@ -78,19 +78,30 @@ class PlanetWorld(PlanetTile):
 
 	def applyContainerProps(self, cls):
 		dvec = cls.getOwner().worldPosition-self.owner.worldPosition
-		svec = self.owner.worldPosition+base.ORIGIN_OFFSET
 		dist = dvec.length
+		atmo = self.space_planet+self.space_atmo
+		grav = self.space_planet+(self.space_atmo*2)
 		obco = self.owner.color
 
-		mx = 1
-		dt = self.getEnvMix(dvec, svec)
-		ac = self.createVector(vec=(obco[0], obco[1], obco[2]))*mx*dt
+		mx = (atmo-dist)/self.space_atmo
+		if mx < 0:
+			mx = 0
+		if mx > 1:
+			mx = 1
 
-		cls.gravity = dvec.normalized()*-9.8
-		cls.air_drag = cls.gravity.length/9.8
-		cls.env_dim = (ac[0]+1, ac[1]+1, ac[2]+1, 1.0)
+		gv = (grav-dist)/(self.space_atmo*2)
+		if gv < 0:
+			gv = 0
+		if gv > 1:
+			gv = 1
 
-		wp = self.owner.worldPosition+self.owner.getAxisVect((0,0,50000))+base.ORIGIN_OFFSET
+		ac = self.createVector(vec=(obco[0], obco[1], obco[2]))*mx
+
+		cls.gravity = dvec.normalized()*-self.space_mass*gv
+		cls.air_drag = mx
+		#cls.env_dim = (ac[0]+1, ac[1]+1, ac[2]+1, 1.0)
+
+		wp = self.owner.worldPosition+self.owner.getAxisVect((0,0,self.space_planet))+base.ORIGIN_OFFSET
 		cls.sendEvent("COMPASS", cls, "NORTH", POS=wp)
 
 	def checkCoords(self, cls):
@@ -98,12 +109,4 @@ class PlanetWorld(PlanetTile):
 			return None
 
 		return True
-
-	def getEnvMix(self, dvec, svec):
-		dt = (svec.normalized().dot(-dvec.normalized())*1.0)+0.5
-		if dt < 0:
-			dt = 0
-		if dt > 1:
-			dt = 1
-		return dt
 
