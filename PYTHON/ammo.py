@@ -12,17 +12,23 @@ def BULLET(cont):
 		owner["ROOTOBJ"] = owner
 
 	fwd = owner.getAxisVect([0,1,0])
-	rayfrom = owner.worldPosition.copy()
-	rayto = rayfrom+fwd
-
 	h = owner.get("HEALTH", 100)
 	l = owner.get("LINV", Vector((0,0,0)))
+
+	if owner.get("CTS", None) == True:
+		owner.worldPosition += fwd*owner.localScale[1]
+		owner.worldPosition += l
+	else:
+		owner["CTS"] = True
+
+	rayfrom = owner.worldPosition-(fwd*0.1)
+	rayto = rayfrom+fwd
 
 	rco = owner
 	if h == 100:
 		rco = owner["ROOTOBJ"]
 
-	obj, pnt, nrm = rco.rayCast(rayto, rayfrom, owner.localScale[1], "", 1, 0, 0)
+	obj, pnt, nrm = rco.rayCast(rayto, rayfrom, owner.localScale[1]+0.1, "", 1, 0, 0)
 
 	if obj != None:
 		gfx = owner.scene.addObject("GFX_LaserHit", owner, 0)
@@ -43,8 +49,8 @@ def BULLET(cont):
 			dmg -= v
 			if dmg <= 0:
 				dmg = 0
-				mv = nrm
-				rv = owner.getAxisVect((0,1,0)).reflect(mv)
+				rv = fwd.reflect(nrm)
+				rv = obj.get("BLOCK", rv)
 				owner.alignAxisToVect(rv, 1, 1.0)
 				owner.worldPosition = pnt+(nrm*0.1)
 				owner["DAMAGE"] *= 0.75
@@ -62,12 +68,12 @@ def BULLET(cont):
 			if cls != None:
 				cls.sendEvent("IMPULSE")
 
-		if h < 0:
+		if owner["HEALTH"] < 0:
 			owner.endObject()
 
-	else:
-		owner.worldPosition += fwd*owner.localScale[1]
-		owner.worldPosition += l
+	#else:
+	#	owner.worldPosition += fwd*owner.localScale[1]
+	#	owner.worldPosition += l
 
 
 def MISSILE(cont):
