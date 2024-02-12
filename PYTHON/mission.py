@@ -30,9 +30,16 @@ class CoreMission(base.CoreObject):
 	HUDLAYOUT = LayoutCinema
 
 	def defaultData(self):
+		self.env_dim = None
+		self.env_col = [0,0,0,1]
+
 		dict = super().defaultData()
 		dict["HUD"] = {"Subtitles":None}
 		return dict
+
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		cls.env_dim = list(self.env_col)
 
 
 class SwitchPlayer(CoreMission):
@@ -47,9 +54,7 @@ class SwitchPlayer(CoreMission):
 		owner = self.objects["Root"]
 		scene = owner.scene
 
-		del owner["GROUND"]
-
-		name = owner.get("PLAYER", "Actor")
+		name = owner.get("PLAYER", "")
 		name = self.data.get("CHAR_NAME", name)
 		anim = owner.get("ACTION", "Jumping")
 		anim = self.data.get("IDLE_ANIM", anim)
@@ -59,42 +64,178 @@ class SwitchPlayer(CoreMission):
 
 		self.chars = {"CUR":None, "NEW":None, "PID":None}
 
-		if name not in scene.objectsInactive:
+		if name in ["", "NONE"] or name not in scene.objectsInactive:
+			name = None
 			print("SPAWN ERROR: Player Switch object not found", name)
 
-		elif name not in list(base.WORLD["PLAYERS"].values())+list(base.PLAYER_CLASSES.keys()):
+		if name == None or name in list(base.WORLD["PLAYERS"].values())+list(base.PLAYER_CLASSES.keys()):
+			self.col = owner.scene.addObject("BOX_Sphere", owner, 0)
+			self.col.setParent(owner)
+			self.col.localPosition = self.createVector()
+			self.col.localOrientation = self.createMatrix()
+			self.col.localScale = (0.5, 0.5, 0.5)
+			self.col["COLLIDE"] = []
+
+			self.data["CHAR_NAME"] = None
+			self.col["RAYNAME"] = "Player Switcher"
+
+			self.objects["Halo"].color = (1,0,0,1)
+			self.objects["Halo"].visible = True
+
+			self.active_state = self.ST_Empty
+
+			print("SPAWN WARNING: Player Switch object is active -", name)
+		else:
 			self.chars["CUR"] = scene.addObject(name, owner, 0)
 			self.chars["CUR"]["DICT"] = base.PROFILE["PLRData"].get(name, {"Object":name, "Data":None})
 			self.chars["CUR"]["PID"] = -1
+
 			cls = base.GETCLASS(self.chars["CUR"])
-			#cls.switchPlayerPassive()
 			cls.setContainerParent(self)
+
+			cls.doAnim(NAME=cls.ANIMSET+anim, FRAME=(0,0))
+
 			self.chars["CUR"].setParent(owner)
 			self.chars["CUR"].localPosition = self.createVector()
 			self.chars["CUR"].localOrientation = self.createMatrix()
 
-			cls.doAnim(NAME=cls.ANIMSET+anim, FRAME=(0,0))
+			self.col = scene.addObject(cls.HITBOX, owner, 0)
+			self.col.setParent(owner)
+			self.col.localPosition = self.createVector()
+			self.col.localOrientation = self.createMatrix()
+			self.col.suspendDynamics(False)
 
-			self.objects["Root"]["RAYNAME"] = cls.NAME
+			self.col["RAYCAST"] = None
+			self.col["RAYNAME"] = cls.NAME
+
+			self.objects["Halo"].visible = False
+
 			self.active_state = self.ST_Disabled
-		else:
-			print("SPAWN WARNING: Player Switch object is active", name)
-			self.endObject()
 
 		self.anim_timer = 0
 
-	def ST_Disabled(self):
-		if self.checkClicked() == True:
-			self.ST_Active_Set()
+		self.active_post.insert(0, self.PS_Ambient)
 
-	def ST_Active_Set(self):
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.env_col = list(self.env_dim)
+		self.env_dim = None
+
+	def ST_Empty_Set(self):
 		owner = self.objects["Root"]
-		plr = owner["RAYCAST"]
+		plr = self.col["RAYCAST"]
 
 		if plr == None or self.chars["CUR"] == None:
 			return
 
-		self.chars["NEW"] = plr.objects["Character"]
+		cls = self.chars["CUR"]["Class"]
+		cls.removeContainerParent()
+		cls.switchPlayerNPC()
+
+		plr.sendEvent("INTERACT", cls, "ACTOR", "TAP")
+
+		self.chars["CUR"] = None
+
+		self.col.endObject()
+		self.col = owner.scene.addObject("BOX_Sphere", owner, 0)
+		self.col.setParent(owner)
+		self.col.localPosition = self.createVector()
+		self.col.localOrientation = self.createMatrix()
+		self.col.localScale = (0.5, 0.5, 0.5)
+		self.col["COLLIDE"] = []
+
+		self.data["CHAR_NAME"] = None
+		self.col["RAYNAME"] = "Player Switcher"
+
+		self.objects["Halo"].color = (1,0,0,1)
+		self.objects["Halo"].visible = True
+
+		self.anim_timer = 0
+		self.active_state = self.ST_Empty
+
+	def ST_Empty(self):
+		owner = self.objects["Root"]
+		halo = self.objects["Halo"]
+
+		t = 1
+		for cls in self.col["COLLIDE"]:
+			if cls != None:
+				t = 0
+				self.sendEvent("SWITCHER", cls, "SEND")
+
+		self.col["COLLIDE"] = []
+
+		evt = self.getFirstEvent("SWITCHER", "RECEIVE")
+
+		if evt == None:
+			self.anim_timer = 0
+			halo.color = (1, t, t, 1)
+		else:
+			self.anim_timer += 1
+
+			t = self.anim_timer/120
+			halo.color = (1-t, t, 0, 1)
+
+			if self.anim_timer > 120:
+				evt.sender.switchPlayerPassive()
+				evt.sender.setContainerParent(self)
+				evt.sender.doAnim(NAME=evt.sender.ANIMSET+self.data["IDLE_ANIM"], FRAME=(0,0))
+
+				self.chars["CUR"] = evt.sender.owner
+
+				self.chars["CUR"].setParent(owner)
+				self.chars["CUR"].localPosition = self.createVector()
+				self.chars["CUR"].localOrientation = self.createMatrix()
+
+				self.data["CHAR_NAME"] = self.chars["CUR"].name
+
+				self.col.endObject()
+				self.col = owner.scene.addObject(evt.sender.HITBOX, owner, 0)
+				self.col.setParent(owner)
+				self.col.localPosition = self.createVector()
+				self.col.localOrientation = self.createMatrix()
+				self.col.suspendDynamics(False)
+
+				self.col["RAYCAST"] = None
+				self.col["RAYNAME"] = evt.sender.NAME
+
+				self.objects["Halo"].visible = False
+
+				self.anim_timer = -5
+				self.active_state = self.ST_Disabled
+
+	def ST_Disabled(self):
+		key = False
+		if self.col["RAYCAST"] != None:
+			if keymap.BINDS["ACTIVATE"].active() == True:
+				key = True
+
+		if self.anim_timer >= 60:
+			self.ST_Empty_Set()
+		elif key == False:
+			if self.anim_timer >= 1:
+				self.ST_Active_Set()
+			if self.anim_timer < 0:
+				self.anim_timer += 1
+		elif self.anim_timer >= 0:
+			self.anim_timer += 1
+
+		self.col["RAYCAST"] = None
+
+	def ST_Active_Set(self):
+		owner = self.objects["Root"]
+		plr = self.col["RAYCAST"]
+
+		if plr == None or self.chars["CUR"] == None:
+			return
+
+		self.chars["NEW"] = plr.owner
 
 		self.chars["PID"] = plr.switchPlayerPassive()
 
@@ -129,6 +270,7 @@ class SwitchPlayer(CoreMission):
 
 		HUD.SetLayout(self)
 
+		self.anim_timer = 0
 		self.active_state = self.ST_Active
 
 	def ST_Active(self):
@@ -168,12 +310,13 @@ class SwitchPlayer(CoreMission):
 		self.chars["CUR"].localPosition = self.createVector()
 		self.chars["CUR"].localOrientation = self.createMatrix()
 
-		owner["RAYNAME"] = self.chars["CUR"]["Class"].NAME
+		self.col["RAYCAST"] = None
+		self.col["RAYNAME"] = self.chars["CUR"]["Class"].NAME
 
 		self.data["CHAR_NAME"] = self.chars["CUR"].name
 
 		self.data["HUD"]["Subtitles"] = None
 
-		self.anim_timer = 0
+		self.anim_timer = -5
 		self.active_state = self.ST_Disabled
 
