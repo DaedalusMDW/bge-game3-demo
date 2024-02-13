@@ -128,13 +128,19 @@ class ZephyrShip(base.CoreObject):
 			print("ZEPHYR DEPART")
 
 		obj = owner
+		if self.ship_lz != None:
+			obj = self.ship_lz.owner
 
 		self.ship_anim = scene.addObject("ZephyrCinematic", obj, 0)
-		if obj.get("ANIMWORLD", False) == True and mode != "Zone" and scene.active_camera == base.SC_CAM:
+
+		wrld = obj.get("FORCEWORLD", False)
+		if scene.active_camera == base.SC_CAM:
+			wrld = True
+
+		if obj.get("ANIMWORLD", False) == True and mode != "Zone" and wrld == True:
 			self.ship_anim.worldPosition = -base.ORIGIN_OFFSET
 			self.ship_anim.worldOrientation = self.createMatrix()
-		elif self.ship_lz != None:
-			obj = self.ship_lz.owner
+		else:
 			self.ship_anim.worldPosition = obj.worldPosition.copy()
 			self.ship_anim.worldOrientation = obj.worldOrientation.copy()
 
@@ -154,16 +160,18 @@ class ZephyrShip(base.CoreObject):
 		cam = self.ship_anim.children["ZephyrCinematic.Camera"]
 		cam.near = base.config.CAMERA_CLIP[0]
 		cam.far = base.config.CAMERA_CLIP[1]
+		if scene.active_camera == base.SC_CAM:
+			scene.active_camera = cam
 
 		name = self.ANIMSET
 		end = self.ANIMFRAMES[mode]
 
-		if scene.active_camera == base.SC_CAM:
-			scene.active_camera = cam
-
-			if mode != "Zone":
-				name = obj.get("ANIMNAME", name)
-				end = obj.get(mode.upper()+"FRAMES", end)
+		if mode != "Zone" and wrld == True:
+			name = obj.get("ANIMNAME", name)
+			end = obj.get(mode.upper()+"FRAMES", end)
+		elif mode == "Zone" and "ANIMZONE" in obj:
+			name = obj["ANIMZONE"]
+			end = obj.get("ZONEFRAMES", end)
 
 		self.doAnim(env, "Zephyr."+name+mode+"Ship", (0,end))
 		self.doAnim(cam, "Zephyr."+name+mode+"Camera", (0,end))
