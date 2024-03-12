@@ -273,7 +273,7 @@ class Starfighter(vehicle.CoreAircraft):
 	SEATS = {
 		"Seat_1": {"NAME":"Pilot", "DOOR":"Root", "CAMERA":[0,-1.75,0.65], "ACTION":"SeatLow", "VISIBLE":True, "SPAWN":[-1.5,-2.5,0]} }
 
-	AERO = {"POWER":10000, "REVERSE":0.2, "HOVER":500, "LIFT":0, "TAIL":0, "DRAG":(2,0.2,2)}
+	AERO = {"POWER":10000, "REVERSE":0.2, "HOVER":500, "LIFT":0, "TAIL":0, "DRAG":(2,0.5,2)}
 
 	def defaultData(self):
 		self.env_dim = None
@@ -295,10 +295,10 @@ class Starfighter(vehicle.CoreAircraft):
 		linV = self.owner.localLinearVelocity
 
 		dampLin = 0.0
-		dampRot = (linV.length*0.01)+0.6
+		dampRot = (linV.length*0.002)+0.6
 
-		if dampRot >= 0.8:
-			dampRot = 0.8
+		if dampRot >= 0.9:
+			dampRot = 0.9
 
 		self.objects["Root"].setDamping(dampLin, dampRot)
 
@@ -311,7 +311,7 @@ class Starfighter(vehicle.CoreAircraft):
 		fac = self.data["POWER"]/self.AERO["POWER"]
 
 		DRAG_X = linV[0]*5*scale
-		DRAG_Y = linV[1]*(50+((1-fac)*(scale-10)))
+		DRAG_Y = linV[1]*(1+((1-fac)*4))*scale*0.5
 		DRAG_Z = linV[2]*5*scale
 
 		self.owner.applyForce((-DRAG_X, -DRAG_Y, -DRAG_Z), True)
@@ -455,9 +455,9 @@ class Starfighter(vehicle.CoreAircraft):
 
 		fac = self.data["POWER"]/self.AERO["POWER"]
 
-		mx = abs(linV.length)
-		if mx > 100:
-			mx = 100
+		mx = abs(linV.length)*1.5
+		if mx > 150:
+			mx = 150
 
 		if self.gravity.length < 1:
 			strafe = force[0]*500
