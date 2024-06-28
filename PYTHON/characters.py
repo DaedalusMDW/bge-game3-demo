@@ -552,8 +552,12 @@ class TRPlayer(ActorPlayer):
 
 		#self.objects["Character"]["DEBUG1"] = self.rayorder
 
-		if self.groundhit != None or self.gravity.length <= 0.1:
+		if self.groundhit != None or self.gravity.length <= 0.1 or self.active_weapon != None:
 			#self.rayorder = "NONE"
+			return
+
+		if keymap.BINDS["PLR_JUMP"].tap() == True:
+			self.ST_Advanced_Set()
 			return
 
 		rayup = self.getWorldSpace(owner, self.wallrayup)
@@ -653,7 +657,7 @@ class TRPlayer(ActorPlayer):
 			self.doAnim(NAME=self.ANIMSET+"WallJump", FRAME=(0,0), PRIORITY=3, MODE="LOOP", BLEND=10)
 			if self.WALL_ALIGN == True:
 				self.doMoveAlign(axis=nrm*-1, up=False)
-			if self.data["WALLJUMPS"] == 0 or keymap.BINDS["TOGGLEMODE"].tap() == True:
+			if self.data["WALLJUMPS"] == 0 or keymap.BINDS["TOGGLEMODE"].tap() == True or keymap.BINDS["PLR_JUMP"].tap() == True:
 				if self.data["ENERGY"] > 15:
 					self.wallJump(nrm)
 					self.data["WALLJUMPS"] += 1

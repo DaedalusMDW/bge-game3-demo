@@ -360,10 +360,10 @@ class Gateship(vehicle.CoreAircraft):
 		self.data["HUD"]["Target"] = (0.5, 0.5)
 
 		exit = False
-		if keymap.BINDS["ENTERVEH"].tap() == True:
-			self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
-			self.stateSwitch()
-			exit = True
+		#if keymap.BINDS["ENTERVEH"].tap() == True:
+		#	self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+		#	self.stateSwitch()
+		#	exit = True
 
 		self.rotateCamera()
 
@@ -416,16 +416,20 @@ class Gateship(vehicle.CoreAircraft):
 		if obj != None and exit == False:
 			self.objects["DHD_Keys"][obj].color[0] += 0.5
 
-		if obj != None and keymap.BINDS["ACTIVATE"].tap() == True:
+		if keymap.BINDS["ACTIVATE"].tap() == True:
 			if obj == "Button":
 				if self.stargate["DIAL"] == False and "1P" in self.stargate["ADDRESS"]:
 					self.stargate["DIAL"] = True
 				else:
 					self.stargate["ADDRESS"] = []
 
-			elif self.stargate["DIAL"] == False:
+			elif obj != None and self.stargate["DIAL"] == False:
 				if self.objects["DHD_Keys"][obj]["ACTIVE"] == True and len(self.stargate["ADDRESS"]) < 9:
 					self.stargate["ADDRESS"].append(obj)
+
+			elif obj == None and exit == False:
+				self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+				self.stateSwitch()
 
 	def ST_Active(self):
 		self.getInputs()

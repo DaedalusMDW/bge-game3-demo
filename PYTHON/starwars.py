@@ -524,6 +524,7 @@ class Starfighter(vehicle.CoreAircraft):
 		if self.data["LANDSTATE"] == "LAND":
 			power *= 0.5
 			rayobj = False
+			landed = False
 			if self.gravity.length >= 1 and force[2] < 0.1:
 				rayto = owner.worldPosition+owner.getAxisVect((0,0,-1))
 				rayobj = owner.rayCastTo(rayto, 0.8, "GROUND")
@@ -544,7 +545,9 @@ class Starfighter(vehicle.CoreAircraft):
 				else:
 					owner.applyForce(-self.gravity*owner.mass*0.5, False)
 				owner.applyTorque((tx*300, ty*200, 0), True)
+
 			elif rayobj != False:
+				landed = True
 				power = 0
 				strafe = 0
 				hover = 0
@@ -556,6 +559,7 @@ class Starfighter(vehicle.CoreAircraft):
 			self.objects["HUD"]["LG"].color[1] = 1*(self.data["LANDFRAME"]>1)
 
 		else:
+			landed = False
 			self.objects["HUD"]["LG"].color[0] = 0
 			self.objects["HUD"]["LG"].color[1] = 1*(self.data["LANDFRAME"]<99)
 
@@ -622,9 +626,9 @@ class Starfighter(vehicle.CoreAircraft):
 		elif self.data["COOLDOWN"] == 0:
 			if keymap.BINDS["SHEATH"].tap() == True:
 				self.toggleWeapons()
-
-			if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
+			elif keymap.BINDS["ENTERVEH"].tap() == True and landed == True:
 				self.stateSwitch("EXIT")
+
 
 	def ST_Docked(self):
 		self.getInputs()
@@ -902,7 +906,7 @@ class LandSpeeder(vehicle.CoreAircraft):
 			else:
 				self.data["COOLDOWN"] -= 1
 
-		if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
+		if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 1:
 			self.data["COOLDOWN"] = 10
 			self.stateSwitch("IDLE")
 

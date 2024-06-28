@@ -58,9 +58,12 @@ class SwitchPlayer(CoreMission):
 		name = self.data.get("CHAR_NAME", name)
 		anim = owner.get("ACTION", "Jumping")
 		anim = self.data.get("IDLE_ANIM", anim)
+		seat = owner.get("SEAT", False)
+		seat = self.data.get("SEAT_ANIM", seat)
 
 		self.data["CHAR_NAME"] = name
 		self.data["IDLE_ANIM"] = anim
+		self.data["SEAT_ANIM"] = seat
 
 		self.chars = {"CUR":None, "NEW":None, "PID":None}
 
@@ -98,6 +101,9 @@ class SwitchPlayer(CoreMission):
 			self.chars["CUR"].setParent(owner)
 			self.chars["CUR"].localPosition = self.createVector()
 			self.chars["CUR"].localOrientation = self.createMatrix()
+
+			if self.data["SEAT_ANIM"] == True:
+				self.chars["CUR"].localPosition[2] = cls.OFFSET[2]
 
 			self.col = scene.addObject(cls.HITBOX, owner, 0)
 			self.col.setParent(owner)
@@ -192,6 +198,9 @@ class SwitchPlayer(CoreMission):
 				self.chars["CUR"].setParent(owner)
 				self.chars["CUR"].localPosition = self.createVector()
 				self.chars["CUR"].localOrientation = self.createMatrix()
+
+				if self.data["SEAT_ANIM"] == True:
+					self.chars["CUR"].localPosition[2] = evt.sender.OFFSET[2]
 
 				self.data["CHAR_NAME"] = self.chars["CUR"].name
 
@@ -309,6 +318,9 @@ class SwitchPlayer(CoreMission):
 		self.chars["CUR"].setParent(owner)
 		self.chars["CUR"].localPosition = self.createVector()
 		self.chars["CUR"].localOrientation = self.createMatrix()
+
+		if self.data["SEAT_ANIM"] == True:
+			self.chars["CUR"].localPosition[2] = cls.OFFSET[2]
 
 		self.col["RAYCAST"] = None
 		self.col["RAYNAME"] = self.chars["CUR"]["Class"].NAME
