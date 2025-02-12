@@ -488,6 +488,7 @@ class TRPlayer(ActorPlayer):
 
 		dict = super().defaultData()
 		dict["WALLJUMPS"] = 0
+		dict["CLIMBRATE"] = 1
 
 		return dict
 
@@ -556,9 +557,10 @@ class TRPlayer(ActorPlayer):
 			#self.rayorder = "NONE"
 			return
 
-		if keymap.BINDS["PLR_JUMP"].tap() == True:
-			self.ST_Advanced_Set()
-			return
+		move = self.motion["Move"].normalized()
+		vref = viewport.getDirection((move[0], move[1], 0))
+		mref = owner.worldOrientation.inverted()*vref
+		fdot = owner.getAxisVect((0,1,0)).dot(vref)
 
 		rayup = self.getWorldSpace(owner, self.wallrayup)
 		rayto = self.getWorldSpace(owner, self.wallrayto)
@@ -581,10 +583,10 @@ class TRPlayer(ActorPlayer):
 
 			## Vault ##
 			if dist >= -0.4 and dist < 0.75 and keymap.BINDS["PLR_JUMP"].tap() == True:
-				if angle < self.SLOPE and self.motion["Move"][1] > 0.1 and self.checkEdge(EDGEPNT) == True:
+				if angle < self.SLOPE and fdot > 0.5 and self.checkEdge(EDGEPNT) == True:
 					self.resetAcceleration()
-					self.jump_timer = int(self.EDGECLIMB_TIME*0.33)
-					self.ST_EdgeClimb_Set()
+					start = round(self.EDGECLIMB_TIME*0.333)
+					self.ST_EdgeClimb_Set(start)
 					return
 
 			## Ledge Grab ##
@@ -622,9 +624,14 @@ class TRPlayer(ActorPlayer):
 
 			if keymap.BINDS["PLR_JUMP"].tap() == True and angle < self.SLOPE:
 				if 2 > owner.localLinearVelocity[2] > 0 and wall == True:
-					owner.localLinearVelocity[2] += 1.5
+					owner.localLinearVelocity = (0, 0, 2)
+					return
 		#else:
 		#	guide.worldPosition = rayto
+
+		if keymap.BINDS["PLR_JUMP"].tap() == True and fdot < -0.8:
+			self.ST_Advanced_Set()
+			return
 
 	## WALL JUMP STATE ##
 	def ST_Advanced_Set(self, wall=None):
@@ -708,6 +715,11 @@ class TRPlayer(ActorPlayer):
 
 		owner.worldLinearVelocity = (0,0,0)
 
+		move = self.motion["Move"].normalized()
+		vref = viewport.getDirection((move[0], move[1], 0))
+		mref = owner.worldOrientation.inverted()*vref
+		fdot = owner.getAxisVect((0,1,0)).dot(vref)
+
 		if self.checkGround(simple=True) == None:
 			self.jump_state = "NONE"
 			rayup = self.getWorldSpace(owner, self.wallrayup)
@@ -749,12 +761,9 @@ class TRPlayer(ActorPlayer):
 				point = owner.worldOrientation*point
 				owner.worldPosition = (TRPNT+point)-owner.getAxisVect((0,0,offset-0.05-diff))
 
-				move = self.motion["Move"]
-				mref = viewport.getDirection((move[0], move[1], 0))
-				mref = owner.worldOrientation.inverted()*mref
 				if abs(mref[0]) > 0.5:
 					X = 1-(2*(mref[0]<0))
-				owner.localLinearVelocity[0] = (X*0.01)*60
+				owner.localLinearVelocity[0] = (X*0.015)*60
 
 				align = owner.worldOrientation*wall
 				self.alignPlayer(0.5, axis=-align)
@@ -774,18 +783,18 @@ class TRPlayer(ActorPlayer):
 		if keymap.BINDS["PLR_DUCK"].tap() == True or edge == None:
 			self.ST_EdgeFall_Set()
 
-		elif keymap.BINDS["PLR_JUMP"].tap() == True:
-			self.ST_EdgeClimb_Set()
-
-		elif keymap.BINDS["TOGGLEMODE"].tap() == True:
+		elif keymap.BINDS["TOGGLEMODE"].tap() == True or (keymap.BINDS["PLR_JUMP"].tap() == True and fdot < -0.8):
 			wall = self.findWall()
 			if wall == True:
 				self.ST_EdgeFall_Set()
 				self.ST_Advanced_Set(wall)
 
+		elif keymap.BINDS["PLR_JUMP"].tap() == True:
+			self.ST_EdgeClimb_Set()
+
 		self.objects["Character"]["DEBUG2"] = str(self.jump_state)
 
-	def ST_EdgeClimb_Set(self):
+	def ST_EdgeClimb_Set(self, start=0):
 		owner = self.objects["Root"]
 		char = self.objects["Character"]
 		rayup = self.getWorldSpace(owner, self.wallrayup)
@@ -804,14 +813,15 @@ class TRPlayer(ActorPlayer):
 			SH, SP, SN = owner.rayCast(rayto, rayfrom, 0, "GROUND", 1, 1, 0)
 
 		if SH != None:
-			self.doAnim(STOP=True)
-			self.doJump(5, 3)
-			self.rayorder = "END"
-			self.active_state = self.ST_Walking
+			if self.jump_state == "NONE":
+				self.doAnim(STOP=True)
+				self.doJump(5, 3)
+				self.rayorder = "END"
+				self.active_state = self.ST_Walking
 
 		elif edge != None:
 			self.doAnim(STOP=True)
-			self.doAnim(NAME=self.ANIMSET+"EdgeClimb", FRAME=(self.jump_timer, self.EDGECLIMB_TIME+10), MODE="PLAY")
+			self.doAnim(NAME=self.ANIMSET+"EdgeClimb", FRAME=(start, self.EDGECLIMB_TIME+10), MODE="PLAY")
 			target = self.groundhit[1]+owner.getAxisVect((0, 0, self.GND_H))
 			loctar = self.getLocalSpace(owner, target)
 			owner.worldPosition = target
@@ -819,6 +829,7 @@ class TRPlayer(ActorPlayer):
 			self.rayorder = loctar.copy()
 			self.jump_state = "NONE"
 			self.jump_timer = 0
+			self.data["CLIMBRATE"] = self.EDGECLIMB_TIME/(self.EDGECLIMB_TIME-start)
 			self.active_state = self.ST_EdgeClimb
 
 	def ST_EdgeClimb(self):
@@ -828,11 +839,13 @@ class TRPlayer(ActorPlayer):
 		char = self.objects["Character"]
 
 		self.jump_state = "NONE"
-		self.jump_timer += 1
+		self.jump_timer += self.data["CLIMBRATE"]
 
 		owner.worldLinearVelocity = (0,0,0)
 
 		time = self.EDGECLIMB_TIME
+		scale = (1/self.data["CLIMBRATE"])
+		start = time-(time*scale)
 
 		fac = self.jump_timer/time
 
@@ -844,6 +857,10 @@ class TRPlayer(ActorPlayer):
 			self.groundhit = ground
 			self.getGroundPoint(ground[0])
 
+		self.doAnim(NAME=self.ANIMSET+"EdgeClimb", FRAME=(0, self.EDGECLIMB_TIME+10), MODE="LOOP")
+		frame = (self.jump_timer*scale)+(start)
+		self.doAnim(SET=frame)
+
 		self.alignToGravity()
 
 		if self.jump_timer >= time or ground == None:
@@ -852,6 +869,7 @@ class TRPlayer(ActorPlayer):
 			self.rayorder = "END"
 			self.jump_state = "NONE"
 			self.jump_timer = 0
+			self.climbrate = 1
 			lerp = [0,0,0]
 			self.active_state = self.ST_Walking
 
