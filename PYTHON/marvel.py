@@ -261,6 +261,8 @@ class Zephyr(world.DynamicWorldTile):
 	LOD_PROXY = 5000
 
 	def defaultData(self):
+		self.env_dim = None
+		self.env_local = [1,1,1,1]
 		self.env_objects = [
 		{"POS":self.createVector(vec=( 3.0,-6.0,-3.0)), "R":12, "C":(0.5, 0.5, 0.5)},
 		{"POS":self.createVector(vec=(-2.5,-6.0,-3.0)), "R":12, "C":(0.5, 0.5, 0.5)},
@@ -293,6 +295,19 @@ class Zephyr(world.DynamicWorldTile):
 	def applyContainerProps(self, cls):
 		super().applyContainerProps(cls)
 
+		slot = cls.dict.get("Parent", None)
+		if slot not in {None, True}:
+			if slot == "Dock":
+				cls.env_dim = list(self.env_local)
+			return
+
+		if cls.owner.name == "Z1Ramp":
+			cls.env_dim = list(self.env_local)
+			return
+		if cls.owner.name == "Z1Dock":
+			cls.env_dim = list(self.env_local)
+			return
+
 		pos = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
 		ac = [1,1,1]
 
@@ -313,8 +328,28 @@ class Zephyr(world.DynamicWorldTile):
 		owner = self.objects["Root"]
 		scene = owner.scene
 		self.active_post.append(self.PS_DoorGrav)
+		self.active_pre.insert(0, self.PR_Ambient)
 
 		self.objects["Sensor"]["COLLIDE"] = []
+
+	def PR_Ambient(self):
+		for gull in self.container_seagulls:
+			self.sendEvent("LIGHTS", gull, "AMBIENT")
+
+		evt = self.getFirstEvent("LIGHTS", "AMBIENT")
+		if evt != None:
+			evt.sender.applyContainerProps(self)
+
+		if self.env_dim == None:
+			amb = 0
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		mesh = self.owner.childrenRecursive.get(self.owner.name+".Mesh", None)
+		if mesh != None:
+			mesh.color = self.env_dim
+
+		self.env_local = list(self.env_dim)
+		self.env_dim = None
 
 	def ST_Disabled(self):
 		## LODS ##
@@ -439,8 +474,8 @@ class Zephyr(world.DynamicWorldTile):
 		objlist = self.objects["Container"]
 
 		for cls in self.getChildren():
-			if cls.NAME == "Cargo Ramp":
-				objlist["CBD"].worldOrientation = cls.objects["Panel"][""].worldOrientation.copy()
+			if cls.owner.name == "Z1Ramp":
+				objlist["CBD"].worldOrientation = cls.objects["Mesh"].worldOrientation.copy()
 			if cls.owner.name == "Z1Dock":
 				if self.data["DOCKED"] not in ["INIT", "NONE"] or self.getFirstEvent("DOCKING", "QUINJET") != None:
 					self.sendEvent("INTERACT", cls, LOCK="Z1QJD")
@@ -491,6 +526,7 @@ class QuinJet(vehicle.CoreAircraft):
 
 	def defaultData(self):
 		self.docking_point = None
+		self.env_dim = None
 
 		dict = super().defaultData()
 		dict["DOCKED"] = "INIT"
@@ -525,6 +561,11 @@ class QuinJet(vehicle.CoreAircraft):
 			if cls != None:
 				cls.stateSwitch(state)
 
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		if cls.owner.name == "WP_GatlingGun":
+			cls.env_dim = list(self.objects["Mesh"].color)
+
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]
 
@@ -547,14 +588,27 @@ class QuinJet(vehicle.CoreAircraft):
 			g = 120
 			print("INIT DOCK")
 
-		mesh = self.objects["Mesh"]
-		mesh.color = (1,0,1,1)
+		gfx = self.objects["GFX"]
+		gfx.color = (1,0,1,1)
 
 		self.doAnim(NAME="QJGlass", FRAME=(g,g), LAYER=1)
 		self.data["GLASSFRAME"] = g
 
 		self.doLandingGear(init=True)
 		self.active_post.append(self.airDrag)
+		self.active_post.append(self.PS_Ambient)
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+
+		self.env_dim = None
 
 	def stateSwitch(self, state=None):
 		if state != None:
@@ -624,7 +678,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["LANDSTATE"] = "FLY"
 
 		owner = self.objects["Root"]
-		mesh = self.objects["Mesh"]
+		gfx = self.objects["GFX"]
 
 		force = self.motion["Force"]
 		torque = self.motion["Torque"]
@@ -649,7 +703,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["HUD"]["Lift"] = 0
 
 		t = (force[1]+1)*0.5
-		mesh.color[1] += (t-mesh.color[1])*0.1
+		gfx.color[1] += (t-gfx.color[1])*0.1
 
 		if keymap.BINDS["TOGGLEMODE"].tap() == True:
 			self.stateSwitch("HOVER")
@@ -658,7 +712,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.getInputs()
 
 		owner = self.objects["Root"]
-		mesh = self.objects["Mesh"]
+		gfx = self.objects["GFX"]
 
 		force = self.motion["Force"]
 		torque = self.motion["Torque"]
@@ -737,7 +791,7 @@ class QuinJet(vehicle.CoreAircraft):
 		self.data["HUD"]["Power"] = 0
 		self.data["HUD"]["Lift"] = 0
 
-		mesh.color[1] *= 0.95
+		gfx.color[1] *= 0.95
 		steer = torque[2]*0.3
 		brake = 0
 
@@ -791,8 +845,8 @@ class QuinJet(vehicle.CoreAircraft):
 	def ST_Idle(self):
 		self.setWheelBrake(1, "REAR")
 		owner = self.owner
-		mesh = self.objects["Mesh"]
-		mesh.color[1] *= 0.95
+		gfx = self.objects["GFX"]
+		gfx.color[1] *= 0.95
 
 		if self.checkClicked() == True:
 			if self.data["DOCKED"] != None:
@@ -803,8 +857,8 @@ class QuinJet(vehicle.CoreAircraft):
 		self.setWheelBrake(1, "REAR")
 		self.doCameraToggle()
 		owner = self.owner
-		mesh = self.objects["Mesh"]
-		mesh.color[1] *= 0.95
+		gfx = self.objects["GFX"]
+		gfx.color[1] *= 0.95
 
 		self.data["GLASSFRAME"] -= 1
 
@@ -827,8 +881,8 @@ class QuinJet(vehicle.CoreAircraft):
 		self.setWheelBrake(1, "REAR")
 		self.doCameraToggle()
 		owner = self.owner
-		mesh = self.objects["Mesh"]
-		mesh.color[1] *= 0.95
+		gfx = self.objects["GFX"]
+		gfx.color[1] *= 0.95
 
 		self.data["GLASSFRAME"] += 1
 		if self.data["GLASSFRAME"] >= 120:
@@ -836,8 +890,8 @@ class QuinJet(vehicle.CoreAircraft):
 
 	def ST_Docked(self):
 		owner = self.owner
-		mesh = self.objects["Mesh"]
-		mesh.color[1] *= 0.95
+		gfx = self.objects["GFX"]
+		gfx.color[1] *= 0.95
 
 		pos = self.docking_point
 		ref = [self.createVector(), self.createMatrix()]
@@ -862,11 +916,26 @@ class GatlingGun(weapon.CoreWeapon):
 	TYPE = "RANGED"
 
 	def defaultData(self):
+		self.env_dim = None
 		dict = super().defaultData()
-
 		dict["SPIN"] = 0
-
 		return dict
+
+	def ST_Startup(self):
+		self.active_post.append(self.PS_Ambient)
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Root"].color = self.env_dim
+		self.objects["Barrel"].color = self.env_dim
+
+		self.env_dim = None
 
 	def ST_Active(self):
 		owner = self.objects["Root"]
@@ -960,6 +1029,31 @@ class DockDoor(door.CoreDoor):
 	LOCK = "Z1QJD"
 	ANIM = {"OPEN":(0,120), "CLOSE":(120,0)}
 
+class DockHull(DockDoor):
+
+	def defaultData(self):
+		self.env_dim = None
+		dict = super().defaultData()
+		return dict
+
+	def ST_Startup(self):
+		self.active_post.append(self.PS_Ambient)
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["MeshFL"].color = self.env_dim
+		self.objects["MeshFR"].color = self.env_dim
+		self.objects["MeshRL"].color = self.env_dim
+		self.objects["MeshRR"].color = self.env_dim
+
+		self.env_dim = None
+
 class SwingDoor(door.CoreDoor):
 
 	NAME = "Door"
@@ -977,5 +1071,26 @@ class CargoRamp(door.CoreDoor):
 	NAME = "Cargo Ramp"
 	SPRING = "MOTOR"
 	ANIM = {"OPEN":(0,300), "CLOSE":(300,0)}
+
+	def defaultData(self):
+		self.env_dim = None
+		dict = super().defaultData()
+		return dict
+
+	def ST_Startup(self):
+		self.active_post.append(self.PS_Ambient)
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+		self.objects["Mesh2"].color = self.env_dim
+
+		self.env_dim = None
 
 

@@ -5,6 +5,18 @@ from bge import logic
 from game3 import base, world, keymap, HUD, viewport
 
 
+class Station(world.DynamicWorldTile):
+
+	CONTAINER = "LOCK"
+	NAME = "World Tile"
+	LOD_ACTIVE = 500
+	LOD_FREEZE = 2000
+	LOD_PROXY = 50000
+	OBJ_HIGH = ["Mesh", "Smooth", "Details", "COL", "Lights"]
+	OBJ_LOW  = ["Mesh"]
+	OBJ_PROXY = ["LOW"]
+
+
 class PlanetTile(world.DynamicWorldTile):
 
 	CONTAINER = "LOCK"
@@ -15,6 +27,14 @@ class PlanetTile(world.DynamicWorldTile):
 	OBJ_HIGH = ["Mesh", "Sea", "Details", "Atmo"]
 	OBJ_LOW  = ["Mesh", "Atmo"]
 	OBJ_PROXY = ["LOW", "Atmo"]
+
+	def ST_Startup(self):
+		self.active_pre.insert(0, self.PR_Ambient)
+
+	def PR_Ambient(self):
+		all = self.getAllEvents("LIGHTS", "AMBIENT")
+		for evt in all:
+			self.sendEvent("LIGHTS", evt.sender, "AMBIENT")
 
 	def buildBorders(self):
 		self.space_planet = self.owner.get("PLANET", 900)
@@ -109,4 +129,5 @@ class PlanetWorld(PlanetTile):
 			return None
 
 		return True
+
 
