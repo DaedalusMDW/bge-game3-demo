@@ -17,7 +17,7 @@ ADDRESS = {
 		"2A:2B:2C:2D:2E:2F:1P": "Abydos Game",
 		"1A:2B:1C:2D:1E:2F:1P": "SunlevelUP",
 		"1A:1B:1C:1D:1E:1F:1O:1P": "Midway",
-		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain GameTiles",
+		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain Tiles",
 	},
 
 	"PEGASUS":{
@@ -25,7 +25,7 @@ ADDRESS = {
 		"2A:2B:2C:2D:2E:2F:1P": "Village Game",
 		"1A:2B:1C:2D:1E:2F:1P": "Planet Gravity",
 		"1A:1B:1C:1D:1E:1F:1O:1P": "Midway",
-		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain GameTiles"
+		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain Tiles"
 	}
 }
 

@@ -73,9 +73,6 @@ class MachineGun(weapon.CorePlayerWeapon):
 
 		vec = viewport.getRayVec()
 
-		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
-		self.data["HUD"]["Stat"] = (self.data["MAG"]/30)*100
-
 		pri = self.getFirstEvent("WP_FIRE", "PRIMARY")
 		pri_tap = self.getFirstEvent("WP_FIRE", "PRIMARY", "TAP")
 		sec = self.getFirstEvent("WP_FIRE", "SECONDARY")
@@ -107,7 +104,7 @@ class MachineGun(weapon.CorePlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 1.0
+				ammo["DAMAGE"] = 10.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, 16+(rnd*4), sz)
 				ammo.color = (1.0, 0.8, 0.5, 1)
@@ -129,6 +126,9 @@ class MachineGun(weapon.CorePlayerWeapon):
 
 		else:
 			self.data["COOLDOWN"] -= 1
+
+		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
+		self.data["HUD"]["Stat"] = (self.data["MAG"]/30)*100
 
 		self.sendEvent("WEAPON", plr, "TYPE", TYPE="Rifle")
 
@@ -242,7 +242,7 @@ class HandGun(weapon.CorePlayerWeapon):
 				ammo.alignAxisToVect(ammo.getVectTo(camera)[1], 2, 1.0)
 				ammo.alignAxisToVect(rvec, 1, 1.0)
 				ammo["ROOTOBJ"] = plrobj
-				ammo["DAMAGE"] = 4.0
+				ammo["DAMAGE"] = 40.0
 				#ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
 				ammo.localScale = (sx, 16+(rnd*4), sz)
 				ammo.color = (1.0, 0.8, 0.5, 1)

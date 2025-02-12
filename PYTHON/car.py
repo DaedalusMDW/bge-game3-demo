@@ -85,7 +85,7 @@ class Buggy(vehicle.CoreCar):
 	VEH_ROLL = 0.0
 	VEH_SPRING = 20 #30
 	VEH_DAMPING = 3 #15
-	VEH_FRICTION = 7
+	VEH_FRICTION = 6
 	VEH_COMPRESS = 3
 
 	CAR_POWER = 20
@@ -93,7 +93,7 @@ class Buggy(vehicle.CoreCar):
 	CAR_BRAKE = 0.5
 	CAR_HANDBRAKE = 0.2
 	CAR_REVERSE = 0.5
-	CAR_STEER = 1.2
+	CAR_STEER = 1.1
 	CAR_DRIVE = "FOUR"
 	CAR_ALIGN = True
 

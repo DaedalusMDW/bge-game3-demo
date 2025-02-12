@@ -316,8 +316,8 @@ class Starfighter(vehicle.CoreAircraft):
 
 		self.owner.applyForce((-DRAG_X, -DRAG_Y, -DRAG_Z), True)
 
-		#self.owner["SPEED"] = str(round(linV[1],2))
-		#self.owner.addDebugProperty("SPEED", True)
+		self.owner["SPEED"] = str(round(linV[1],2))
+		self.owner.addDebugProperty("SPEED", True)
 
 	def airLift(self):
 		owner = self.getOwner()
@@ -1584,15 +1584,15 @@ class LaserGun(weapon.CorePlayerWeapon):
 			if self.data["ROCKETS"] <= 0:
 				if self.data["COOLDOWN"] >= 100:
 					self.data["HUD"]["Text"] = "RELOADING: "+str(int(100-self.data["COOLDOWN"]))
-					self.data["HUD"]["Stat"] = 100-((self.data["COOLDOWN"]-100)/0.3)
+					self.data["HUD"]["Stat"] = 100-((self.data["COOLDOWN"]-100)/(10/100))
 					vec = plrobj.getAxisVect([0,0,1])
 
 				if self.data["COOLDOWN"] <= 10 and sec_tap != None:
-					self.data["COOLDOWN"] = 130
+					self.data["COOLDOWN"] = 110
 
 				if 90 < self.data["COOLDOWN"] <= 100:
 					self.data["ROCKETS"] = 1
-					self.data["COOLDOWN"] = 0
+					self.data["COOLDOWN"] = 10
 
 			elif self.data["COOLDOWN"] <= 10 and sec_tap != None:
 				ammo = base.SC_SCN.addObject("AMMO_Rocket", self.objects["Barrel"], 0)
@@ -1604,7 +1604,7 @@ class LaserGun(weapon.CorePlayerWeapon):
 				self.data["ROCKETS"] = 0
 
 		elif self.data["COOLDOWN"] > 20:
-			self.data["COOLDOWN"] = 0
+			self.data["COOLDOWN"] = 10
 
 		if self.data["COOLDOWN"] <= 0:
 			if pri != None:

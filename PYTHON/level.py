@@ -132,8 +132,8 @@ def TELEPORT(cont):
 	if "CAMERA" in owner:
 		del owner["CAMERA"]
 
-	for cls in owner["COLLIDE"]:
-		if keymap.BINDS["ACTIVATE"].tap() == True:
+	if keymap.BINDS["ACTIVATE"].tap() == True and viewport.getController() in owner["COLLIDE"]:
+		for cls in owner["COLLIDE"]:
 			if name in scene.objects:
 				target = scene.objects[name]
 				cls.teleportTo(target.worldPosition.copy(), target.worldOrientation.copy())

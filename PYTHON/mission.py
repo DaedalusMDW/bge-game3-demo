@@ -4,21 +4,13 @@ from bge import logic
 
 from game3 import base, world, keymap, HUD, viewport
 
-SUB_NAMES = {
-	"Actor": (0.0, 1.0, 0.0),
-	"Ahsoka": (1.0, 0.67, 0.0)
-}
-
-SUB_SWITCH = {
-	"Actor": {"NAME":"Actor", "LINE":"<PLACEHOLDER>", "TIME":90, "ACTION":"EmoteWave", "FRAMES":(0,120)},
-	"Ahsoka": {"NAME":"Ahsoka", "LINE":"Time to see a jedi in action!", "TIME":60}
-}
+import PYTHON.subtitles as subtitles
 
 
 class Cinema(HUD.Cinema):
 
 	OBJECT = "Cinema"
-	COLORSHEET = SUB_NAMES
+	COLORSHEET = subtitles.NAMES
 
 class LayoutCinema(HUD.HUDLayout):
 
@@ -262,8 +254,8 @@ class SwitchPlayer(CoreMission):
 
 		nc = self.chars["CUR"].name
 		nn = self.chars["NEW"].name
-		s = SUB_SWITCH.get(nc, None)
-		s = SUB_SWITCH.get(nc+nn, s)
+		s = subtitles.SWITCH.get(nc, None)
+		s = subtitles.SWITCH.get(nc+nn, s)
 
 		self.data["HUD"]["Subtitles"] = s
 
