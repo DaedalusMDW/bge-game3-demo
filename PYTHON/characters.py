@@ -20,6 +20,7 @@ class ActorPlayer(player.CorePlayer):
 		self.npc_state = 0
 		self.ragdollparts = None
 		self.ragdollstate = "INIT"
+		self.ragdollwait = 300
 
 		dict = super().defaultData()
 		dict["COOLDOWN"] = 0
@@ -39,10 +40,11 @@ class ActorPlayer(player.CorePlayer):
 
 	def switchPlayerNPC(self):
 		self.npc_state = -2
-		if self.active_state != self.ST_IdleRD:
+		if self.active_state not in {self.ST_Ragdoll, self.ST_IdleRD}:
+			self.ragdollwait = 0
 			super().switchPlayerNPC()
-		elif self.active_state != self.ST_Ragdoll:
-			super().switchPlayerNPC()
+		elif self.active_state == self.ST_Ragdoll:
+			self.endObject()
 
 	def applyModifier(self, dict):
 		if "IMPULSE" in dict:
@@ -72,6 +74,13 @@ class ActorPlayer(player.CorePlayer):
 		if self.data["HEALTH"] <= 0:
 			self.data["HEALTH"] = -1
 
+			for cls in list(self.attachments):
+				vec = self.createVector()
+				for i in [0,1,2]:
+					vec[i] += ((logic.getRandomFloat()*2)-1)*0.3
+				pos = list(self.owner.worldPosition+vec)
+				cls.dropItem(pos)
+
 			if self.data["NPC_LEAD"] == True:
 				self.removeContainerParent()
 				self.npc_leader = None
@@ -88,7 +97,7 @@ class ActorPlayer(player.CorePlayer):
 				self.active_state = self.ST_Ragdoll
 
 			elif self.player_id == None:
-				self.endObject()
+				self.endObject(False)
 
 		super().manageStatAttr()
 
@@ -142,6 +151,7 @@ class ActorPlayer(player.CorePlayer):
 					obj["DESTROY"] = True
 				self.ragdollparts = None
 				self.ragdollstate = "INIT"
+				self.active_state = self.ST_Idle
 				self.switchPlayerNPC()
 				return
 			elif act == None:
@@ -335,6 +345,14 @@ class ActorPlayer(player.CorePlayer):
 		char = self.owner
 		rig = self.objects["Rig"]
 
+		if self.ragdollwait > 0:
+			self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0), PRIORITY=0, MODE="LOOP", BLEND=0)
+			#self.doPlayerAnim("FORWARD")
+			#if self.ragdollwait == 300:
+			#	gimbal = scene.addObject("Gimbal", char, 0)
+			self.ragdollwait -= 1
+			return
+
 		if self.ragdollparts == None:
 			self.resetGroundRay()
 			self.resetAcceleration()
@@ -342,6 +360,7 @@ class ActorPlayer(player.CorePlayer):
 
 			self.ragdollparts = {}
 			newobj = scene.addObject("Ragdoll"+char.name, char, 0)
+			#gimbal = scene.addObject("Gimbal", char, 0)
 
 			rdroot = newobj.children[newobj.name+".root"]
 			rdroot["Class"] = self
@@ -349,6 +368,7 @@ class ActorPlayer(player.CorePlayer):
 			rdroot.removeParent()
 			rdroot.worldLinearVelocity = (0,0,0)
 			rdroot.worldAngularVelocity = (0,0,0)
+			rdroot.disableRigidBody()
 			rdroot.suspendDynamics()
 
 			rdroot.worldPosition = self.objects["RagdollHelper"].worldPosition.copy()
@@ -362,6 +382,7 @@ class ActorPlayer(player.CorePlayer):
 					obj.removeParent()
 					obj.worldLinearVelocity = (0,0,0)
 					obj.worldAngularVelocity = (0,0,0)
+					obj.disableRigidBody()
 					obj.suspendDynamics()
 					self.ragdollparts[bn] = obj
 
@@ -385,6 +406,10 @@ class ActorPlayer(player.CorePlayer):
 					obj["POSE_CON"].target = jnt
 					#obj["POSE_CON"].active = True
 
+					#gimbal = scene.addObject("Gimbal", char, 0)
+					#gimbal.worldPosition = obj["POSE_POS"]
+					#gimbal.worldOrientation = obj["POSE_ORI"]
+
 			self.ragdollparts["root"] = rdroot
 			self.ragdollstate = "ACTIVE"
 			newobj.endObject()
@@ -404,17 +429,19 @@ class ActorPlayer(player.CorePlayer):
 				obj.applyForce(self.gravity*obj.mass, False)
 
 		if base.ORIGIN_SHIFT != None:
-			self.ragdollstate = "ORIGIN"
-			for name in self.ragdollparts:
-				obj = self.ragdollparts[name]
-				obj.disableRigidBody()
-				obj.suspendDynamics()
-		elif self.ragdollstate == "ORIGIN":
-			self.ragdollstate = "ACTIVE"
-			for name in self.ragdollparts:
-				obj = self.ragdollparts[name]
-				obj.restoreDynamics()
-				obj.enableRigidBody()
+			self.endObject()
+			return
+		#	self.ragdollstate = "ORIGIN"
+		#	for name in self.ragdollparts:
+		#		obj = self.ragdollparts[name]
+		#		obj.disableRigidBody()
+		#		obj.suspendDynamics()
+		#elif self.ragdollstate == "ORIGIN":
+		#	self.ragdollstate = "ACTIVE"
+		#	for name in self.ragdollparts:
+		#		obj = self.ragdollparts[name]
+		#		obj.restoreDynamics()
+		#		obj.enableRigidBody()
 
 		self.doAnim(MODE="LOOP", BLEND=0)
 		#rig.update()
