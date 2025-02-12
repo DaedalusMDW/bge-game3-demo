@@ -648,6 +648,7 @@ class QuinJet(vehicle.CoreAircraft):
 			if self.removeFromSeat(self.driving_seat, force=None) == True:
 				self.data["GLASSFRAME"] = 120
 				self.doAnim(NAME="QJGlass", FRAME=(120,120), LAYER=1)
+				self.driving_seat = None
 				self.active_state = self.ST_Idle
 			else:
 				self.stateSwitch("ENTER")

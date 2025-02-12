@@ -211,9 +211,9 @@ class ActorPlayer(player.CorePlayer):
 
 		all = self.getAllEvents("INTERACT", "SEND")
 		for evt in all:
-			self.sendEvent("INTERACT", evt.sender, "RECEIVE")
+			self.sendEvent("INTERACT", evt.sender, "RECEIVE", TYPE="RAY")
 
-		if self.npc_leader != None:
+		if self.data["NPC_LEAD"] == True: # and self.npc_leader != None:
 			plr = self.npc_leader.owner
 			vec = plr.worldPosition-char.worldPosition
 			vref = vec.normalized()
@@ -241,7 +241,7 @@ class ActorPlayer(player.CorePlayer):
 			if self.npc_state == -1 or vec.length > 10 or self.getParent().dict.get("Vehicle", None) != None:
 				self.removeContainerParent()
 				self.npc_leader = None
-				self.npc_state = 0
+				self.npc_state = -2
 				self.data["NPC_LEAD"] = False
 
 		else:
@@ -251,11 +251,44 @@ class ActorPlayer(player.CorePlayer):
 
 			act = self.getFirstEvent("INTERACT", "ACTOR")
 			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
-			if evt != None:
-				self.setContainerParent(evt.sender)
-				self.npc_leader = evt.sender
-				self.npc_state = -2
+
+			if evt != None and self.npc_state == -2:
+				self.npc_state = 0
+
+			if act != None:
+				self.npc_leader = act.sender
+
+			if act == None and self.npc_state >= 1:
+				self.npc_state = -1
+
+			if self.npc_state >= 0:
+				if act != None:
+					self.npc_state += 1
+				else:
+					self.npc_state = 0
+
+			veh = self.getAllEvents("INTERACT", "RECEIVE")
+			if self.npc_state > 30:
+
+				for obj in self.collisionList:
+					cls = obj.get("Class", None)
+					if "COLLIDE" in obj and cls != None:
+						self.sendEvent("INTERACT", cls, "SEND", OBJECT=obj, TYPE="COLLIDE")
+
+				for vd in veh:
+					if vd != None:
+						self.npc_leader = None
+						self.npc_state = -2
+						l = vd.getProp("LOCK", "")
+						o = vd.getProp("OBJECT", None)
+						self.sendEvent("INTERACT", vd.sender, "TAP", "ACTOR", OBJECT=o, LOCK=l)
+				return
+
+			if self.npc_state == -1 and self.npc_leader.invalid == False:
+				self.setContainerParent(self.npc_leader)
 				self.data["NPC_LEAD"] = True
+				self.npc_state = -2
+
 			if act == None:
 				all = self.getAllEvents("SWITCHER", "SEND")
 				for evt in all:

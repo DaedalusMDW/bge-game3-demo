@@ -197,6 +197,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		if state == "IDLE":
 			if self.removeFromSeat(self.driving_seat) == True:
+				self.driving_seat = None
 				self.active_state = self.ST_Idle
 
 		elif state == "DRIVER":
@@ -348,6 +349,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		elif key != None and keymap.BINDS["ACTIVATE"].tap() == True:
 			self.attachToSeat(self.player_seats[self.driving_seat], key)
+			self.driving_seat = key
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
 			self.stateSwitch()
@@ -362,6 +364,7 @@ class Gateship(vehicle.CoreAircraft):
 		exit = False
 		#if keymap.BINDS["ENTERVEH"].tap() == True:
 		#	self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+		#	self.driving_seat = "Seat_B"
 		#	self.stateSwitch()
 		#	exit = True
 
@@ -384,6 +387,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		if key != None and keymap.BINDS["ACTIVATE"].tap() == True:
 			self.attachToSeat(self.player_seats[self.driving_seat], key)
+			self.driving_seat = key
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
 			self.stateSwitch()
@@ -429,6 +433,7 @@ class Gateship(vehicle.CoreAircraft):
 
 			elif obj == None and exit == False:
 				self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+				self.driving_seat = "Seat_B"
 				self.stateSwitch()
 
 	def ST_Active(self):
@@ -502,6 +507,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		if keymap.BINDS["ENTERVEH"].tap() == True or self.data["SEATFRAMES"].get(self.driving_seat, 0) <= 0:
 			self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+			self.driving_seat = "Seat_B"
 			self.stateSwitch()
 
 
@@ -569,8 +575,7 @@ class CoreGate(base.CoreObject):
 
 		self.STARGATE["Gate"] = self.dict
 
-
-		del self.objects["Root"]["RAYCAST"]
+		#del self.objects["Root"]["RAYCAST"]
 
 		self.active_pre.append(self.PR_Iris)
 
@@ -902,7 +907,7 @@ class CoreDHD(base.CoreObject):
 
 		self.stargate = None
 
-		del self.objects["Root"]["RAYCAST"]
+		#del self.objects["Root"]["RAYCAST"]
 		del self.objects["Button"]["GROUND"]
 
 		for key in self.objects["Keys"]:

@@ -400,6 +400,7 @@ class Starfighter(vehicle.CoreAircraft):
 			if self.removeFromSeat(self.driving_seat) == True:
 				self.data["GLASSFRAME"] = 120
 				self.doAnim(NAME="StarfighterRigGlass", FRAME=(120,121), LAYER=1)
+				self.driving_seat = None
 				self.active_state = self.ST_Idle
 				self.sendEvent("DOCKING", self.getParent(), "STARFIGHTER", "RELEASE")
 			else:
