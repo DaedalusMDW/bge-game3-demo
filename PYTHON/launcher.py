@@ -11,7 +11,7 @@ from game3 import GAMEPATH, firstrun, base, settings, config, keymap, world
 DTR = logic.globalDict.get("_DESKTOP", DTR)
 logic.globalDict["_DESKTOP"] = DTR
 
-VER = "3.0 alpha"
+VER = "3.1 alpha"
 
 
 def RUN(cont):
@@ -34,6 +34,17 @@ def RUN(cont):
 def VERSION(cont):
 	global VER
 	cont.owner["Text"] = "Release "+VER
+
+
+def LOGO(cont):
+	owner = cont.owner
+	t = owner.get("FRAME", 330)
+
+	if keymap.SYSTEM["ESCAPE"].tap() == True or keymap.SYSTEM["UI_SKIP"].tap() or firstrun == False or t < 0:
+		owner.scene.replace("Scene")
+		owner.endObject()
+
+	owner["FRAME"] = t-1
 
 
 def VIDEO(cont):

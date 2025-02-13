@@ -10,7 +10,7 @@ from mathutils import Vector
 class ActorPlayer(player.CorePlayer):
 
 	NAME = "Stick Man"
-	INVENTORY = {"Shoulder_R": "WP_MachineGun", "Hip_R":"WP_HandGun"}
+	INVENTORY = {}
 
 	SLOPE = 50
 
@@ -941,4 +941,252 @@ class TRPlayer(ActorPlayer):
 		self.jump_timer = 0
 		self.doAnim(STOP=True)
 		self.active_state = self.ST_Walking
+
+
+class InventoryRed(HUD.Inventory):
+
+	def ST_Startup(self):
+		self.objects["Items"].localPosition = (-10, -17, 0)
+		self.objects["Items"].localOrientation = self.createMatrix(deg=True, rot=[0,0,90])
+
+class LayoutRed(player.ActorLayout):
+
+	MODULES = [HUD.Stats, HUD.Aircraft, InventoryRed] #, HUD.Weapons]
+
+class GreenPlayer(ActorPlayer):
+
+	NAME = "Green Actor"
+	CLASS = "Standard"
+	WP_TYPE = "RANGED"
+	HAND = {"MAIN":"Hand_R", "OFF":"Hand_L"}
+	INVENTORY = {"Hip_R":"WP_GravGun"}
+	#OFFSET = (0, 0.05, 0.1)
+	#SPEED = 0.1
+	#ACCEL = 20
+	#JUMP = 5
+	#EYE_H = 1.658
+	#EDGE_H = 2.0
+	CAM_TYPE = "THIRD"
+
+class RedPlayer(ActorPlayer):
+
+	NAME = "Red Actor"
+	CLASS = "Standard"
+	WP_TYPE = "RANGED"
+	HAND = {"MAIN":"Hand_R", "OFF":"Hand_L"}
+	INVENTORY = {"Back":"INV_JetPack", "Shoulder_R": "WP_MachineGun", "Hip_R":"WP_HandGun"}
+	#OFFSET = (0, 0.05, 0.1)
+	SPEED = 0.1
+	ACCEL = 20
+	JUMP = 5
+	#EYE_H = 1.658
+	#EDGE_H = 2.0
+	CAM_TYPE = "THIRD"
+
+	def defaultData(self):
+		dict = super().defaultData()
+		dict["NERF"] = False
+
+		return dict
+
+	def ST_Advanced_Set(self):
+		owner = self.objects["Root"]
+
+		keymap.MOUSELOOK.center()
+
+		if self.jump_state != "FLYING":
+			if self.gravity.length <= 0.1:
+				return
+			self.alignToGravity(owner, axis=1, neg=True)
+			vref = viewport.getDirection((0,1,0))
+			owner.alignAxisToVect(vref, 2, 1.0)
+
+		if self.jump_state == "NONE":
+			owner.localLinearVelocity[1] -= 3
+
+		owner.setDamping(0.8, 0.9)
+
+		self.setPhysicsType("RIGID")
+
+		if self.data["CAMERA"]["State"] == "THIRD":
+			self.data["CAMERA"]["Slow"] = 12
+			self.data["CAMERA"]["Distance"] = 5
+			eye = 0
+		else:
+			self.data["CAMERA"]["Slow"] = 0
+			self.data["CAMERA"]["Distance"] = 0
+			eye = self.EYE_H-self.GND_H
+
+		self.data["CAMERA"]["Orbit"] = False
+		self.data["CAMERA"]["AutoZoom"] = False
+
+		if self.jump_state != "FLYING":
+			viewport.VIEWCLASS.doCameraFollow(owner, 0, False, run=True)
+			viewport.VIEWCLASS.dist = self.data["CAMERA"]["Distance"]
+
+			viewport.setEyeHeight(eye=[0,0,eye], set=True)
+			viewport.setEyePitch(90, set=True)
+
+		HUD.SetLayout(self, LayoutRed)
+
+		self.objects["Wings"].color = (0,1,1,1)
+
+		self.data["HUD"]["Target"] = None
+		self.data["HUD"]["Power"] = 0
+		self.data["HUD"]["Lift"] = 0
+		self.data["HUD"]["Forward"] = [0,0,1]
+
+		self.jump_state = "FLYING"
+		self.active_state = self.ST_Flying
+
+	def ST_Walking_Set(self):
+		keymap.MOUSELOOK.center()
+
+		self.jump_state = "FALLING"
+		self.data["CAMERA"]["Slow"] = 0
+		self.data["CAMERA"]["Orbit"] = True
+		self.data["CAMERA"]["AutoZoom"] = self.CAM_AUTOZOOM
+		self.data["CAMERA"]["Distance"] = None
+
+		self.objects["Wings"].color = (1,1,1,1)
+
+		if self.gravity.length > 0.1:
+			self.alignCamera(axis=(0,0,1), up=-self.gravity.normalized())
+		viewport.setEyePitch(0, set=True)
+		self.assignCamera()
+
+		self.alignPlayer()
+
+		self.setPhysicsType("DYNAMIC")
+		self.objects["Root"].setDamping(0, 0)
+
+		HUD.SetLayout(self)
+		self.resetAcceleration()
+		self.doAnim(STOP=True)
+
+		self.active_state = self.ST_Walking
+
+	def ST_Flying(self):
+		self.getInputs()
+
+		owner = self.objects["Root"]
+		linWV = owner.worldLinearVelocity
+
+		wall = self.checkWall(axis=owner.getAxisVect((0,0,1)), simple=1)
+
+		if keymap.BINDS["TOGGLEMODE"].tap() == True or self.gravity.length <= 0.1:
+			self.ST_Walking_Set()
+			return
+		if wall != None:
+			if "COLLIDE" not in wall[0]:
+				self.ST_Walking_Set()
+				return
+
+		owner.applyForce(-self.gravity, False)
+
+		ORIX = 0
+		ORIY = 0
+		if self.gravity.length > 0.1:
+			GZ = self.gravity.normalized()
+			ORIX = ((self.toDeg(owner.getAxisVect((1,0,0)).angle(GZ))-90)/90)
+			#ORIX = ORIX*abs(ORIX)
+			ORIY = ((self.toDeg(owner.getAxisVect((0,0,1)).angle(GZ))-90)/90)
+			#ORIY = ORIY*abs(ORIY)
+
+		FORWARD = keymap.BINDS["PLR_FORWARD"].axis() - keymap.BINDS["PLR_BACKWARD"].axis()
+		STRAFE = keymap.BINDS["PLR_STRAFERIGHT"].axis() - keymap.BINDS["PLR_STRAFELEFT"].axis()
+
+		TURN = keymap.BINDS["PLR_TURNLEFT"].axis() - keymap.BINDS["PLR_TURNRIGHT"].axis()
+		LOOK = keymap.BINDS["PLR_LOOKUP"].axis() - keymap.BINDS["PLR_LOOKDOWN"].axis()
+
+		msX, msY = keymap.MOUSELOOK.axis()
+		TURN = (msX*100)+(TURN) #*abs(TURN))
+		LOOK = (-msY*100)+(LOOK) #*abs(LOOK))
+
+		if abs(TURN) > 1:
+			TURN = 1-(2*(TURN<0))
+		if abs(LOOK) > 1:
+			LOOK = 1-(2*(LOOK<0))
+
+		move = [STRAFE, FORWARD]
+		rotate = [LOOK, 0, TURN]
+
+		#if self.data["ENERGY"] < 1:
+		#	self.data["NERF"] = True
+
+		#if self.data["NERF"] == True:
+		#	move[1] = -1
+		#	if self.data["ENERGY"] > 10:
+		#		self.data["NERF"] = False
+
+		POWER = (25-(ORIY*20))
+		POWER = POWER+(POWER*(move[1]*0.5))
+		DRAG = move[1]*-0.2
+
+		BANK = ((rotate[2]*0.5)-(rotate[2]*DRAG))
+		PITCH = ((rotate[0]*1)-(rotate[0]*DRAG))
+		YAW = ((move[0]*0.4)-(move[0]*DRAG))
+
+		YAWROLL = (ORIX*-0.4)+(YAW*(abs(0.8*ORIX)+0.2))
+
+		owner.applyForce((0, 0, POWER), True)
+		owner.applyTorque((-PITCH, YAWROLL, -BANK), True)
+
+		#if self.jump_state == "JETPACK_FLY":
+		#	diff = 1*self.data["RECHARGE"]
+
+		#	check = self.data["ENERGY"]+diff
+		#	if check <= 100:
+		#		self.data["ENERGY"] += diff
+		#	elif self.data["ENERGY"] < 100:
+		#		self.data["ENERGY"] = 100
+
+		#elif move[1] > 0:
+		#	self.data["ENERGY"] -= abs(move[1])*0.3
+
+		#elif self.data["NERF"] == False:
+		#	diff = abs(move[1])*self.data["RECHARGE"]
+
+		#	check = self.data["ENERGY"]+diff
+		#	if check <= 100:
+		#		self.data["ENERGY"] += diff
+		#	elif self.data["ENERGY"] < 100:
+		#		self.data["ENERGY"] = 100
+
+		self.doAnim(NAME=self.ANIMSET+"Flying", FRAME=(20,20), MODE="LOOP", BLEND=10)
+
+		self.data["HUD"]["Power"] = (1+move[1])*50
+
+		self.objects["Character"]["DEBUG1"] = ORIX
+		self.objects["Character"]["DEBUG2"] = ORIY
+
+		## Slow Camera ##
+		if self.data["CAMERA"]["State"] == "THIRD":
+			self.data["CAMERA"]["Slow"] = 12
+			self.data["CAMERA"]["Distance"] = 5
+			eye = 0
+		else:
+			self.data["CAMERA"]["Slow"] = 0
+			self.data["CAMERA"]["Distance"] = 0
+			eye = self.EYE_H-self.GND_H
+
+		viewport.setEyeHeight(eye=[0,0,eye], set=True)
+		viewport.setEyePitch(90, set=True)
+
+		self.jump_state = "FLYING"
+
+
+class BluePlayer(TRPlayer):
+
+	NAME = "Blue Actor"
+	CLASS = "Standard"
+	WP_TYPE = "MELEE"
+	INVENTORY = {"Shoulder_L": "WP_SimpleStaff", "Shoulder_R":"WP_LaserGun"}
+	#OFFSET = (0, 0.1, 0.18)
+	SPEED = 0.12
+	JUMP = 6
+	#EYE_H = 1.527
+	#EDGE_H = 1.85
+	ACCEL = 15
+	CAM_TYPE = "THIRD"
 

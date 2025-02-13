@@ -17,6 +17,58 @@ class Station(world.DynamicWorldTile):
 	OBJ_PROXY = ["LOW"]
 
 
+class Donut(world.DynamicWorldTile):
+
+	CONTAINER = "LOCK"
+	NAME = "World Tile"
+
+	def buildBorders(self):
+		self.radius_inner = self.owner.get("MIN", 46)
+		self.radius_outer = self.owner.get("MAX", 54)
+		self.radius_width = self.owner.get("LEN", 6)
+		self.radius_mass = self.owner.get("GRAV", 9.8)
+		self.radius_quad = self.owner.get("QUAD", "")
+		self.active_pre.insert(0, self.PR_BorderPatrol)
+
+	def getLodLevel(self):
+		return "ACTIVE"
+
+	def applyContainerProps(self, cls):
+		dvec = cls.getOwner().worldPosition-self.owner.worldPosition
+		gz = base.mathutils.Matrix.Scale(0.0, 3, self.owner.getAxisVect((0,1,0)))
+		dvec = dvec*gz
+
+		cls.gravity = dvec.normalized()*self.radius_mass
+		cls.air_drag = 1.0
+
+	def checkCoords(self, cls):
+		if cls.CONTAINER == "LOCK" or cls == self:
+			return None
+
+		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
+		tr = lp.copy()
+		tr[1] = 0
+
+		if abs(lp[1]) > self.radius_width:
+			return False
+
+		if tr.length < self.radius_inner:
+			return False
+
+		if tr.length > self.radius_outer:
+			return False
+
+		if "X" in self.radius_quad:
+			if lp[0] < 0:
+				return False
+
+		if "Z" in self.radius_quad:
+			if lp[2] < 0:
+				return False
+
+		return True
+
+
 class PlanetTile(world.DynamicWorldTile):
 
 	CONTAINER = "LOCK"

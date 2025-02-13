@@ -98,7 +98,10 @@ class Buggy(vehicle.CoreCar):
 	CAR_ALIGN = True
 
 	SEATS = {
-		"Seat_1": {"NAME":"Driver", "DOOR":"Root", "CAMERA":(0, -0.05, 0.6), "VISIBLE":"FULL", "ACTION":"SeatLow", "SPAWN":[-1.5,0,0]} }
+		"Seat_1": {"NAME":"Driver",    "DOOR":"Root",   "CAMERA":( 0.0,-0.0, 0.6), "VISIBLE":"FULL", "ACTION":"SeatTall",  "SPAWN":[-1.5, 1, 0.3], "STATE":"DRIVER"},
+		"Seat_2": {"NAME":"Passenger", "DOOR":"Door_2", "CAMERA":( 0.6,-0.3, 0.6), "VISIBLE":"FULL", "ACTION":"SeatTallP", "SPAWN":[ 1.5, 0, 0.3], "STATE":"PASSIVE"},
+		"Seat_3": {"NAME":"Passenger", "DOOR":"Door_3", "CAMERA":(-0.6,-0.3, 0.6), "VISIBLE":"FULL", "ACTION":"SeatTallP", "SPAWN":[-1.5, 0, 0.3], "STATE":"PASSIVE"}
+		}
 
 	def ST_Startup(self):
 		self.env_dim = None
