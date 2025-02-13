@@ -284,7 +284,7 @@ class ActorPlayer(player.CorePlayer):
 						self.sendEvent("INTERACT", vd.sender, "TAP", "ACTOR", OBJECT=o, LOCK=l)
 				return
 
-			if self.npc_state == -1 and self.npc_leader.invalid == False:
+			if self.npc_state == -1 and self.npc_leader != None and self.npc_leader.invalid == False:
 				self.setContainerParent(self.npc_leader)
 				self.data["NPC_LEAD"] = True
 				self.npc_state = -2
