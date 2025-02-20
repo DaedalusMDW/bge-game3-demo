@@ -6,12 +6,13 @@ from mathutils import Vector, Matrix
 
 from bge import logic, events, render
 
+from game3 import keymap, input, settings, config, world
+
+
 render.setVsync(render.VSYNC_ON)
 render.showFramerate(False)
 render.showProfile(False)
 render.showProperties(False)
-
-from game3 import keymap, input, settings, config, world
 
 
 FREEZE = None

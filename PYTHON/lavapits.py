@@ -23,8 +23,8 @@ def RUN(cont):
 			for cls in logic.UPDATELIST:
 				if cls.owner.name == "Silverbird" and plr.container_parent != cls:
 					print("SILVERBIRD FOUND - ATTEMPTING BIND:", cls, plr)
-					cls.attachToSeat(plr, "Seat_1")
-					cls.stateSwitch()
+					o = cls.doorobj.get("Seat_1")
+					plr.sendEvent("INTERACT", cls, "TAP", "ACTOR", OBJECT=o)
 					SILVERBIRD = cls
 					base.LEVEL["FIRSTRUN"] = True
 					break
@@ -40,7 +40,7 @@ def PARKING(cont):
 		sz = owner.get("Z", 1)
 		owner["_SIZE"] = (sx, sy, sz)
 		obj = owner.children.get(owner.name+".Spawn", owner)
-		owner["_SPAWN"] = obj.worldPosition
+		owner["_SPAWN"] = obj
 
 	if cls == None:
 		return
@@ -504,12 +504,11 @@ class Silverbird(vehicle.CoreAircraft):
 			return False
 
 		cls.doAnim(STOP=True)
-		cls.exitVehicle(self.expnt)
+		cls.exitVehicle(self.expnt.worldPosition, self.expnt.worldOrientation)
 		cls.removeContainerParent()
 		cls.data["LINVEL"] = [0,0,0]
 
 		self.player_seats[key] = None
-		self.driving_seat = None
 		self.expnt = None
 
 		return True

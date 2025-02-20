@@ -17,10 +17,12 @@ class ActorPlayer(player.CorePlayer):
 	def defaultData(self):
 		self.env_dim = None
 		self.npc_leader = None
+		self.npc_follow = []
 		self.npc_state = 0
+		self.npc_portal = None
 		self.ragdollparts = None
 		self.ragdollstate = "INIT"
-		self.ragdollwait = 300
+		self.ragdollwait = 10
 
 		dict = super().defaultData()
 		dict["COOLDOWN"] = 0
@@ -31,12 +33,63 @@ class ActorPlayer(player.CorePlayer):
 
 	def defaultStates(self):
 		super().defaultStates()
+		self.active_pre.append(self.PR_EventsNPC)
 		self.active_post.insert(0, self.PS_Ambient)
 
-	def saveWorldPos(self):
-		super().saveWorldPos()
-		if self.data["NPC_LEAD"] == True:
-			self.data["POS"] = [0,0,0]
+	def doLoad(self):
+		super().doLoad()
+
+		cls = self.getParent()
+
+		print("- LOAD -", self.NAME, self.data["NPC_LEAD"], cls)
+
+		if self.data["NPC_LEAD"] == True and cls != None:
+			self.removeContainerParent()
+			self.sendEvent("NPC", cls, "FOLLOW", "SEND")
+			self.npc_leader = cls
+
+	def doUpdate(self):
+		print("- UPDATE -", self.NAME, self.data["NPC_LEAD"], self.getParent())
+
+		for cls in self.npc_follow:
+			if cls not in self.getChildren() and self.player_id != None:
+				print("- LINK -", self.NAME, cls.NAME, cls.getParent())
+				cls.setContainerParent(self)
+				cls.dict["Portal"] = self.dict["Object"]
+				cls.npc_portal = "FOLLOW"
+
+		self.npc_follow = []
+
+		super().doUpdate()
+
+		if self.npc_portal == "FOLLOW":
+			if self.active_state == self.ST_IdleRD:
+				self.data["POS"] = [0, -1.5, 0.5]
+			else:
+				self.data["POS"] = [0, -0.5, 0]
+
+	def teleportTo(self, pos=None, ori=None, vel=False, cam=True):
+		super().teleportTo(pos, ori, vel, cam)
+
+		owner = self.getOwner()
+
+		for cls in self.npc_follow:
+			obj = cls.getOwner()
+			obj.worldPosition = owner.worldPosition+owner.getAxisVect((0,-0.5,0))
+
+	def switchPlayerActive(self, ID=None):
+		self.npc_follow = []
+		self.npc_leader = None
+		self.npc_state = -2
+		self.data["NPC_LEAD"] = False
+		super().switchPlayerActive(ID)
+
+	def switchPlayerPassive(self):
+		self.npc_follow = []
+		self.npc_leader = None
+		self.npc_state = -2
+		self.data["NPC_LEAD"] = False
+		return super().switchPlayerPassive()
 
 	def switchPlayerNPC(self):
 		self.npc_state = -2
@@ -49,7 +102,8 @@ class ActorPlayer(player.CorePlayer):
 	def applyModifier(self, dict):
 		if "IMPULSE" in dict:
 			self.jump_state = "JUMP"
-			self.npc_state = -1
+			if self.data["NPC_LEAD"] == True:
+				self.npc_state = -1
 
 		super().applyModifier(dict)
 
@@ -82,8 +136,9 @@ class ActorPlayer(player.CorePlayer):
 				cls.dropItem(pos)
 
 			if self.data["NPC_LEAD"] == True:
-				self.removeContainerParent()
+				self.npc_follow = []
 				self.npc_leader = None
+				self.npc_state = -2
 				self.data["NPC_LEAD"] = False
 
 			if ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
@@ -105,6 +160,17 @@ class ActorPlayer(player.CorePlayer):
 		super().applyContainerProps(cls)
 		cls.env_dim = list(self.objects["Mesh"].color)
 
+	def PR_EventsNPC(self):
+		self.npc_follow = []
+
+		all = self.getAllEvents("NPC", "FOLLOW", "SEND")
+		for evt in all:
+			cls = evt.sender
+			self.sendEvent("NPC", cls, "FOLLOW", "LOOP")
+			if cls not in self.npc_follow:
+				self.npc_follow.append(cls)
+				#print("- FOLLOW -", cls.NAME, evt.getProp("INTERACT"))
+
 	def PS_Ambient(self):
 		if self.env_dim == None:
 			cls = self.getParent()
@@ -119,45 +185,64 @@ class ActorPlayer(player.CorePlayer):
 
 	def ST_IdleRD(self):
 		self.ST_Ragdoll()
-
 		char = self.owner
-
-		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
-			self.npc_leader = self.getParent()
 
 		all = self.getAllEvents("INTERACT", "SEND")
 		for evt in all:
 			self.sendEvent("INTERACT", evt.sender, "RECEIVE")
 
+		flw = self.getFirstEvent("NPC", "FOLLOW", "LOOP")
+		if flw != None:
+			self.sendEvent("NPC", flw.sender, "FOLLOW", "SEND")
+
+		act = self.getFirstEvent("INTERACT", "ACTOR")
+		evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
+
+		if self.ragdollparts == None:
+			return
+
+		if evt != None and self.npc_state == -2:
+			self.npc_state = 0
+
+		if act != None and self.npc_state >= 0:
+			self.npc_state += 1
+
+		if flw != None:
+			if self.npc_state < -2:
+				self.npc_state = -2
+		elif self.npc_state < -10:
+			self.npc_leader = None
+			self.npc_state = -2
+		elif self.npc_state >= 0:
+			self.npc_state = -3
+		else:
+			self.npc_state -= 1
+
+		if self.npc_leader == None or self.npc_leader.invalid == True:
+			self.npc_state = -1
+
+		if self.npc_state > 30 or self.npc_state == -1:
+			if self.npc_state == -1:
+				print("RD BREAK")
+				self.data["NPC_LEAD"] = False
+			self.npc_state = -2
+			for name in self.ragdollparts:
+				obj = self.ragdollparts[name]
+				obj["DESTROY"] = True
+			self.ragdollparts = None
+			self.ragdollstate = "INIT"
+			self.active_state = self.ST_Idle
+			self.switchPlayerNPC()
+			return
+
+		elif act == None:
+			if self.npc_state >= 0:
+				self.npc_state = 0
+
 		if self.npc_leader != None:
 			plr = self.npc_leader.owner
 			pos = char.worldPosition-plr.worldPosition
 			pos = plr.worldOrientation.inverted()*pos
-
-			act = self.getFirstEvent("INTERACT", "ACTOR")
-			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
-
-			if evt != None and self.npc_state == -2:
-				self.npc_state = 0
-
-			if act != None and self.npc_state >= 0:
-				self.npc_state += 1
-
-			if self.npc_state > 30 or self.npc_state == -1:
-				if self.npc_state != -1:
-					self.npc_state = -2
-				for name in self.ragdollparts:
-					obj = self.ragdollparts[name]
-					obj["DESTROY"] = True
-				self.ragdollparts = None
-				self.ragdollstate = "INIT"
-				self.active_state = self.ST_Idle
-				self.switchPlayerNPC()
-				return
-			elif act == None:
-				if self.npc_state >= 0:
-					self.npc_state = 0
-
 		else:
 			plr = None
 			pos = self.createVector()
@@ -204,20 +289,17 @@ class ActorPlayer(player.CorePlayer):
 
 		owner.setDamping(0, 0)
 
-		if self.data["NPC_LEAD"] == True and self.npc_leader == None:
-			self.npc_leader = self.getParent()
-			owner.worldPosition = self.npc_leader.owner.worldPosition
-			owner.worldPosition += self.npc_leader.owner.worldOrientation*self.createVector(vec=(0,-0.5,0))
+		plr = None
+		vec = self.createVector()
+		vref = self.createVector()
 
 		all = self.getAllEvents("INTERACT", "SEND")
 		for evt in all:
 			self.sendEvent("INTERACT", evt.sender, "RECEIVE", TYPE="RAY")
 
-		if self.data["NPC_LEAD"] == True: # and self.npc_leader != None:
-			plr = self.npc_leader.owner
-			vec = plr.worldPosition-char.worldPosition
-			vref = vec.normalized()
+		flw = self.getFirstEvent("NPC", "FOLLOW", "LOOP")
 
+		if self.data["NPC_LEAD"] == True:
 			act = self.getFirstEvent("INTERACT", "ACTOR")
 			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 
@@ -233,22 +315,44 @@ class ActorPlayer(player.CorePlayer):
 				else:
 					self.npc_state = 0
 
-			if self.npc_state > 30 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
-				self.npc_state = -2
-				self.active_state = self.ST_IdleRD
-				return
+			if flw != None:
+				if self.npc_state < -2:
+					self.npc_state = -2
+				self.npc_leader = flw.sender
 
-			if self.npc_state == -1 or vec.length > 10 or self.getParent().dict.get("Vehicle", None) != None:
-				self.removeContainerParent()
+				plr = flw.sender.owner
+				vec = plr.worldPosition-char.worldPosition
+				vref = vec.normalized()
+
+				if vec.length > 10:
+					v = self.createVector()
+					self.npc_state = -1
+				else:
+					self.sendEvent("NPC", flw.sender, "FOLLOW", "SEND")
+
+				if self.npc_state > 30 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
+					self.npc_state = -2
+					self.active_state = self.ST_IdleRD
+
+			elif self.npc_state < -10:
 				self.npc_leader = None
 				self.npc_state = -2
 				self.data["NPC_LEAD"] = False
+				print("BREAK FOLLOW", self.NAME)
+
+			elif self.npc_state >= 0:
+				self.npc_state = -3
+			else:
+				self.npc_state -= 1
+
+			if self.npc_state == -1:
+				vec = self.createVector()
+				self.npc_leader = None
+				self.npc_state = -2
+				self.data["NPC_LEAD"] = False
+				print("STOP FOLLOW", self.NAME)
 
 		else:
-			plr = None
-			vec = self.createVector()
-			vref = self.createVector()
-
 			act = self.getFirstEvent("INTERACT", "ACTOR")
 			evt = self.getFirstEvent("INTERACT", "ACTOR", "TAP")
 
@@ -256,7 +360,7 @@ class ActorPlayer(player.CorePlayer):
 				self.npc_state = 0
 
 			if act != None:
-				self.npc_leader = act.sender
+				self.sendEvent("NPC", act.sender, "FOLLOW", "SEND", INTERACT=True)
 
 			if act == None and self.npc_state >= 1:
 				self.npc_state = -1
@@ -269,7 +373,6 @@ class ActorPlayer(player.CorePlayer):
 
 			veh = self.getAllEvents("INTERACT", "RECEIVE")
 			if self.npc_state > 30:
-
 				for obj in self.collisionList:
 					cls = obj.get("Class", None)
 					if "COLLIDE" in obj and cls != None:
@@ -284,15 +387,19 @@ class ActorPlayer(player.CorePlayer):
 						self.sendEvent("INTERACT", vd.sender, "TAP", "ACTOR", OBJECT=o, LOCK=l)
 				return
 
-			if self.npc_state == -1 and self.npc_leader != None and self.npc_leader.invalid == False:
-				self.setContainerParent(self.npc_leader)
-				self.data["NPC_LEAD"] = True
+			if flw != None and self.npc_state == -1:
+				self.sendEvent("NPC", flw.sender, "FOLLOW", "SEND")
+				self.npc_leader = flw.sender
 				self.npc_state = -2
+				self.data["NPC_LEAD"] = True
+				print("START FOLLOW", self.NAME)
 
 			if act == None:
 				all = self.getAllEvents("SWITCHER", "SEND")
 				for evt in all:
 					self.sendEvent("SWITCHER", evt.sender, "RECEIVE")
+
+		char["DEBUG2"] = self.npc_state
 
 		if ground != None:
 			if self.jump_state != "NONE":
@@ -366,10 +473,16 @@ class ActorPlayer(player.CorePlayer):
 		self.alignToGravity()
 
 	def ST_Freeze(self):
+		self.npc_follow = []
 		if self.active_state == self.ST_IdleRD:
 			self.ST_IdleRD()
 		elif self.active_state == self.ST_Ragdoll:
 			self.ST_Ragdoll()
+		else:
+			self.npc_leader = None
+			self.npc_state = -2
+			self.data["NPC_LEAD"] = False
+
 		super().ST_Freeze()
 		self.PS_Ambient()
 
@@ -378,11 +491,9 @@ class ActorPlayer(player.CorePlayer):
 		char = self.owner
 		rig = self.objects["Rig"]
 
+		if base.ORIGIN_SHIFT != None:
+			return
 		if self.ragdollwait > 0:
-			self.doAnim(NAME=self.ANIMSET+"Jumping", FRAME=(0,0), PRIORITY=0, MODE="LOOP", BLEND=0)
-			#self.doPlayerAnim("FORWARD")
-			#if self.ragdollwait == 300:
-			#	gimbal = scene.addObject("Gimbal", char, 0)
 			self.ragdollwait -= 1
 			return
 
@@ -461,9 +572,9 @@ class ActorPlayer(player.CorePlayer):
 				obj.applyForce(-self.owner.scene.gravity*obj.mass, False)
 				obj.applyForce(self.gravity*obj.mass, False)
 
-		if base.ORIGIN_SHIFT != None:
-			self.endObject()
-			return
+		#if base.ORIGIN_SHIFT != None:
+		#	self.endObject()
+		#	return
 		#	self.ragdollstate = "ORIGIN"
 		#	for name in self.ragdollparts:
 		#		obj = self.ragdollparts[name]
@@ -1100,8 +1211,8 @@ class RedPlayer(ActorPlayer):
 		LOOK = keymap.BINDS["PLR_LOOKUP"].axis() - keymap.BINDS["PLR_LOOKDOWN"].axis()
 
 		msX, msY = keymap.MOUSELOOK.axis()
-		TURN = (msX*100)+(TURN) #*abs(TURN))
-		LOOK = (-msY*100)+(LOOK) #*abs(LOOK))
+		TURN = (msX*80)+(TURN) #*abs(TURN))
+		LOOK = (-msY*120)+(LOOK) #*abs(LOOK))
 
 		if abs(TURN) > 1:
 			TURN = 1-(2*(TURN<0))
@@ -1123,7 +1234,7 @@ class RedPlayer(ActorPlayer):
 		POWER = POWER+(POWER*(move[1]*0.5))
 		DRAG = move[1]*-0.2
 
-		BANK = ((rotate[2]*0.5)-(rotate[2]*DRAG))
+		BANK = ((rotate[2]*0.4)-(rotate[2]*DRAG))
 		PITCH = ((rotate[0]*1)-(rotate[0]*DRAG))
 		YAW = ((move[0]*0.4)-(move[0]*DRAG))
 
