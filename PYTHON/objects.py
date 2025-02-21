@@ -555,7 +555,7 @@ class GravGun(weapon.CorePlayerWeapon):
 		vec = viewport.getRayVec()
 
 		self.data["HUD"]["Text"] = ""
-		self.data["HUD"]["Stat"] = round(self.beam)
+		self.data["HUD"]["Stat"] = round((self.beam/30)*100)
 
 		pri = self.getFirstEvent("WP_FIRE", "PRIMARY")
 		pri_tap = self.getFirstEvent("WP_FIRE", "PRIMARY", "TAP")
@@ -567,7 +567,7 @@ class GravGun(weapon.CorePlayerWeapon):
 				if pri_tap != None or self.target.invalid == True:
 					self.gravlock = False
 					self.target = None
-					self.beam = 100
+					self.beam = 30
 					self.data["COOLDOWN"] = 10
 				else:
 					self.data["HUD"]["Text"] = self.target.NAME

@@ -46,6 +46,10 @@ class SwitchPlayer(CoreMission):
 		owner = self.objects["Root"]
 		scene = owner.scene
 
+		self.spot = scene.addObject("GFX_Spot", owner, 0)
+		self.spot.setParent(owner)
+		self.spot.localPosition = (0, 0, -0.98)
+
 		name = owner.get("PLAYER", "")
 		name = self.data.get("CHAR_NAME", name)
 		anim = owner.get("ACTION", "Jumping")
@@ -74,8 +78,8 @@ class SwitchPlayer(CoreMission):
 			self.data["CHAR_NAME"] = None
 			self.col["RAYNAME"] = "Player Switcher"
 
-			self.objects["Halo"].color = (1,0,0,1)
-			self.objects["Halo"].visible = True
+			self.spot.color = (1,0,0,1)
+			self.spot.visible = True
 
 			self.active_state = self.ST_Empty
 
@@ -106,7 +110,8 @@ class SwitchPlayer(CoreMission):
 			self.col["RAYCAST"] = None
 			self.col["RAYNAME"] = cls.NAME
 
-			self.objects["Halo"].visible = False
+			self.spot.color = (0,0,1,1)
+			self.spot.visible = True
 
 			self.active_state = self.ST_Disabled
 
@@ -151,15 +156,14 @@ class SwitchPlayer(CoreMission):
 		self.data["CHAR_NAME"] = None
 		self.col["RAYNAME"] = "Player Switcher"
 
-		self.objects["Halo"].color = (1,0,0,1)
-		self.objects["Halo"].visible = True
+		self.spot.color = (1,0,0,1)
+		self.spot.visible = True
 
 		self.anim_timer = 0
 		self.active_state = self.ST_Empty
 
 	def ST_Empty(self):
 		owner = self.objects["Root"]
-		halo = self.objects["Halo"]
 
 		t = 1
 		for cls in self.col["COLLIDE"]:
@@ -173,12 +177,12 @@ class SwitchPlayer(CoreMission):
 
 		if evt == None:
 			self.anim_timer = 0
-			halo.color = (1, t, t, 1)
+			self.spot.color = (1, t, t, 1)
 		else:
 			self.anim_timer += 1
 
 			t = self.anim_timer/120
-			halo.color = (1-t, t, 0, 1)
+			self.spot.color = (1-t, 0, t, 1)
 
 			if self.anim_timer > 120:
 				evt.sender.switchPlayerPassive()
@@ -206,7 +210,8 @@ class SwitchPlayer(CoreMission):
 				self.col["RAYCAST"] = None
 				self.col["RAYNAME"] = evt.sender.NAME
 
-				self.objects["Halo"].visible = False
+				self.spot.color = (0,0,1,1)
+				self.spot.visible = True
 
 				self.anim_timer = -5
 				self.active_state = self.ST_Disabled

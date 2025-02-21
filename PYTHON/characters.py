@@ -20,6 +20,11 @@ class ActorPlayer(player.CorePlayer):
 		self.npc_follow = []
 		self.npc_state = 0
 		self.npc_portal = None
+		self.npc_spot = None
+		self.npc_spot_obj = self.owner.scene.addObject("GFX_Spot", self.owner, 0)
+		self.npc_spot_obj.setParent(self.owner)
+		self.npc_spot_obj.localPosition = (0,0,-0.97)
+		self.npc_spot_obj.visible = False
 		self.ragdollparts = None
 		self.ragdollstate = "INIT"
 		self.ragdollwait = 10
@@ -34,7 +39,7 @@ class ActorPlayer(player.CorePlayer):
 	def defaultStates(self):
 		super().defaultStates()
 		self.active_pre.append(self.PR_EventsNPC)
-		self.active_post.insert(0, self.PS_Ambient)
+		self.active_post.append(self.PS_Ambient)
 
 	def doLoad(self):
 		super().doLoad()
@@ -183,6 +188,14 @@ class ActorPlayer(player.CorePlayer):
 
 		self.env_dim = None
 
+		obj = self.npc_spot_obj
+		if self.npc_spot != None:
+			obj.visible = True
+			obj.color = list(self.npc_spot)
+			self.npc_spot = None
+		else:
+			obj.visible = False
+
 	def ST_IdleRD(self):
 		self.ST_Ragdoll()
 		char = self.owner
@@ -325,9 +338,9 @@ class ActorPlayer(player.CorePlayer):
 				vref = vec.normalized()
 
 				if vec.length > 10:
-					v = self.createVector()
 					self.npc_state = -1
 				else:
+					self.npc_spot = (0,1,0,1)
 					self.sendEvent("NPC", flw.sender, "FOLLOW", "SEND")
 
 				if self.npc_state > 30 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
@@ -346,7 +359,10 @@ class ActorPlayer(player.CorePlayer):
 				self.npc_state -= 1
 
 			if self.npc_state == -1:
+				plr = None
 				vec = self.createVector()
+				vref = self.createVector()
+
 				self.npc_leader = None
 				self.npc_state = -2
 				self.data["NPC_LEAD"] = False
@@ -371,19 +387,21 @@ class ActorPlayer(player.CorePlayer):
 				else:
 					self.npc_state = 0
 
+			for obj in self.collisionList:
+				cls = obj.get("Class", None)
+				if "COLLIDE" in obj and cls != None:
+					self.npc_spot = (1,0,0,1)
+					self.sendEvent("INTERACT", cls, "SEND", OBJECT=obj, TYPE="COLLIDE")
+
 			veh = self.getAllEvents("INTERACT", "RECEIVE")
 			if self.npc_state > 30:
-				for obj in self.collisionList:
-					cls = obj.get("Class", None)
-					if "COLLIDE" in obj and cls != None:
-						self.sendEvent("INTERACT", cls, "SEND", OBJECT=obj, TYPE="COLLIDE")
-
 				for vd in veh:
 					if vd != None:
 						self.npc_leader = None
 						self.npc_state = -2
 						l = vd.getProp("LOCK", "")
 						o = vd.getProp("OBJECT", None)
+						self.npc_spot = None
 						self.sendEvent("INTERACT", vd.sender, "TAP", "ACTOR", OBJECT=o, LOCK=l)
 				return
 
@@ -397,6 +415,7 @@ class ActorPlayer(player.CorePlayer):
 			if act == None:
 				all = self.getAllEvents("SWITCHER", "SEND")
 				for evt in all:
+					self.npc_spot = None
 					self.sendEvent("SWITCHER", evt.sender, "RECEIVE")
 
 		char["DEBUG2"] = self.npc_state
