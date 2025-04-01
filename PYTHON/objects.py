@@ -529,7 +529,7 @@ class GravGun(weapon.CorePlayerWeapon):
 			self.gimbal.visible = True
 
 	def ST_Startup(self):
-		self.data["HUD"]["Text"] = ""
+		self.data["HUD"]["Text"] = "OFF"
 		self.data["HUD"]["Stat"] = 100
 
 		self.gimbal = self.owner.scene.addObject("Gimbal", self.owner, 0)
@@ -537,9 +537,12 @@ class GravGun(weapon.CorePlayerWeapon):
 		self.gimbal.visible = False
 
 	def ST_Stop(self):
+		self.data["HUD"]["Text"] = "OFF"
+		self.data["HUD"]["Stat"] = 100
+
 		self.gravlock = False
 		self.target = None
-		self.beam = 100
+		self.beam = 30
 		super().ST_Stop()
 
 	def ST_Active(self):
@@ -554,8 +557,8 @@ class GravGun(weapon.CorePlayerWeapon):
 
 		vec = viewport.getRayVec()
 
-		self.data["HUD"]["Text"] = ""
-		self.data["HUD"]["Stat"] = round((self.beam/30)*100)
+		self.data["HUD"]["Text"] = "NO TARGET"
+		self.data["HUD"]["Stat"] = 100
 
 		pri = self.getFirstEvent("WP_FIRE", "PRIMARY")
 		pri_tap = self.getFirstEvent("WP_FIRE", "PRIMARY", "TAP")
@@ -569,8 +572,11 @@ class GravGun(weapon.CorePlayerWeapon):
 					self.target = None
 					self.beam = 30
 					self.data["COOLDOWN"] = 10
+
 				else:
 					self.data["HUD"]["Text"] = self.target.NAME
+					self.data["HUD"]["Stat"] = round((self.beam/30)*100)
+
 					self.gimbal.visible = True
 					if keymap.BINDS["WP_UP"].tap() == True and self.beam < 30:
 						self.beam += 1
@@ -604,16 +610,23 @@ class GravGun(weapon.CorePlayerWeapon):
 			elif sec != None and plr.raycls != None:
 				pos = plr.raycls.getOwner().worldPosition
 				ref = plr.owner.worldPosition-pos
+
 				if ref.length < 30:
 					self.data["HUD"]["Text"] = plr.raycls.NAME
-					self.data["HUD"]["Stat"] = round(ref.length)
+					self.data["HUD"]["Stat"] = round((ref.length/30)*100)
+
 					if pri_tap != None and plr.raycls.getOwner().getPhysicsId() != 0:
 						self.target = plr.raycls
 						self.gravlock = True
 						self.beam = round(ref.length)
 						self.gimbal.worldPosition = pos
 
+				else:
+					self.data["HUD"]["Text"] = "OUT OF RANGE"
+					self.data["HUD"]["Stat"] = 100
+
 		else:
+			self.data["HUD"]["Text"] = "BREAK"
 			self.data["HUD"]["Stat"] = (self.data["COOLDOWN"]/10)*100
 			self.data["COOLDOWN"] -= 1
 
