@@ -18,8 +18,9 @@ config.LIBRARY_PATH = "CONTENT"
 config.MAPS_PATH = "MAPS"
 
 config.CAMERA_CLIP = [0.1, 100000]
-config.MOUSE_BUFFER = True   #False to remove mouse input processing
-config.FPS_CAP = 60 #set 0 for uncapped, -1 for use-framerate capped.
+config.MOUSE_BUFFER = True	# False to remove mouse input processing
+config.FPS_CAP = 60		# Set 0 for uncapped, -1 for use-framerate capped.
+#config.FONT_SCALE = 0.3	# Scale font texture, screen width (as 16/9) divided by 6400.
 
 config.DEFAULT_PLAYER = "Actor"
 

@@ -33,7 +33,7 @@ def RUN(cont):
 
 def VERSION(cont):
 	global VER
-	cont.owner.resolution = 0.4
+	cont.owner.resolution = config.FONT_SCALE
 	cont.owner["Text"] = "Release "+VER
 
 
