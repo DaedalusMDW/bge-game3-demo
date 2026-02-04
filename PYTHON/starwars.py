@@ -7,26 +7,40 @@ from bge import logic
 from game3 import base, keymap, viewport, HUD, vehicle, weapon
 from PYTHON import objects, characters
 
-HYPERLANES = []
+
+HYPERRING = None
 
 
 class HyperLane(base.CoreObject):
 
 	NAME = "Hyper Bacon"
-	CONTAINER = "WORLD"
+	CONTAINER = "LOCK"
 
 	def defaultData(self):
 		dict = super().defaultData()
 		dict["NAME"] = self.owner.get("NAME", self.owner.name)
 		dict["RADIUS"] = self.owner.get("RADIUS", 0)
+		dict["RELEASE"] = self.owner.get("RELEASE", True)
+		dict["ARRIVE"] = self.owner.get("ARRIVE", dict["RADIUS"])
+		dict["BLOCK"] = self.owner.get("BLOCK", dict["RADIUS"])
 
 		return dict
 
-	def ST_Startup(self):
-		global HYPERLANES
+	def defaultStates(self):
+		super().defaultStates()
+		self.active_state = self.ST_Idle
 
-		if self not in HYPERLANES:
-			HYPERLANES.append(self)
+	def ST_Idle(self):
+		n = self.data["NAME"]
+		r = self.data["RADIUS"]
+		d = self.data["RELEASE"]
+		a = self.data["ARRIVE"]
+		b = self.data["BLOCK"]
+
+		global HYPERRING
+		if HYPERRING != None:
+			self.sendEvent("BACON", HYPERRING, "PING",
+				NAME=n, RADIUS=r, RELEASE=d, ARRIVE=a, BLOCK=b)
 
 
 class HyperRing(base.CoreObject):
@@ -34,7 +48,7 @@ class HyperRing(base.CoreObject):
 	NAME = "Hyperspace Ring"
 	CONTAINER = "WORLD"
 	GHOST = True
-	SPEED = 50
+	SPEED = 100
 
 	def defaultStates(self):
 		self.active_pre = []
@@ -44,11 +58,13 @@ class HyperRing(base.CoreObject):
 	def defaultData(self):
 		self.docking_point = None
 		self.gfx = None
+		self.timer = 0
 
 		dict = super().defaultData()
 		dict["DOCKED"] = "NONE"
 		dict["FRAME"] = 0
 		dict["BACON"] = None
+		dict["RELEASE"] = False
 
 		return dict
 
@@ -63,7 +79,35 @@ class HyperRing(base.CoreObject):
 			e = 90
 		self.doAnim("Rig", "HyperRingClamps", (f,e))
 
+		global HYPERRING
+		if HYPERRING == None:
+			HYPERRING = self
+
+		self.owner["TARGET"] = ""
+		self.owner.addDebugProperty("TARGET", True)
+
+	def setWaypoint(self):
+		way = self.owner.worldPosition+base.ORIGIN_OFFSET
+		pos = base.LEVEL["WAYPOINT"][-1]
+		pos = self.createVector(vec=pos)
+
+		if (way-pos).length > 5:
+			base.LEVEL["WAYPOINT"].append(list(way))
+			print("WAYPOINT ADD:", way)
+
+	def clearWaypoint(self):
+		way = self.owner.worldPosition+base.ORIGIN_OFFSET
+
+		for pos in list(base.LEVEL["WAYPOINT"]):
+			pos = self.createVector(vec=pos)
+			if (way-pos).length <= 5:
+				old = base.LEVEL["WAYPOINT"].pop()
+				print("WAYPOINT REMOVE:", old)
+
 	def stateSwitch(self, state):
+		self.timer = 0
+		self.objects["HUD"].color = (0.5,0.5,0.5,1)
+
 		if state == "DOCK":
 			self.objects["Guide"].visible = False
 			self.objects["HUD"].visible = False
@@ -71,6 +115,7 @@ class HyperRing(base.CoreObject):
 			self.data["FRAME"] = 0
 			self.doAnim("Rig", "HyperRingClamps", (0,90))
 			self.active_state = self.ST_Docking
+			self.clearWaypoint()
 
 		if state == "ACTIVE":
 			self.objects["Guide"].visible = False
@@ -82,7 +127,7 @@ class HyperRing(base.CoreObject):
 
 		if state == "TRAVEL":
 			self.objects["Guide"].visible = False
-			self.objects["HUD"].visible = False
+			self.objects["HUD"].visible = (self.data["BACON"]==None)
 			self.active_state = self.ST_Travel
 
 		if state == "RELEASE":
@@ -90,8 +135,10 @@ class HyperRing(base.CoreObject):
 			self.objects["HUD"].visible = False
 			self.data["DOCKED"] = "RELEASE"
 			self.data["FRAME"] = 180
+			self.data["RELEASE"] = False
 			self.doAnim("Rig", "HyperRingClamps", (90,0))
 			self.active_state = self.ST_Docking
+			self.setWaypoint()
 
 		if state == "IDLE":
 			self.objects["Guide"].visible = True
@@ -99,6 +146,7 @@ class HyperRing(base.CoreObject):
 			self.data["DOCKED"] = "NONE"
 			self.data["FRAME"] = 0
 			self.data["BACON"] = None
+			self.data["RELEASE"] = False
 			self.active_state = self.ST_Idle
 
 	def ST_Idle(self):
@@ -132,8 +180,6 @@ class HyperRing(base.CoreObject):
 			self.stateSwitch("DOCK")
 
 	def ST_Active(self):
-		global HYPERLANES
-
 		owner = self.owner
 		hud = self.objects["HUD"]
 		cls = self.getSlotChild("Dock")
@@ -141,60 +187,189 @@ class HyperRing(base.CoreObject):
 		yref = owner.worldOrientation*self.createVector(vec=(0,1,0))
 
 		hud.visible = True
-		hud.color = (0.5,0.5,0.5,1)
+		hud.color = (0.5, 0.5, 0.5, 1)
+
+		owner["TARGET"] = ""
 
 		x = 360
+		v = None
 		t = None
-		for i in HYPERLANES:
-			vec = i.owner.worldPosition-owner.worldPosition
-			if vec.length > (i.data["RADIUS"]+(self.SPEED*2)):
-				ang = self.toDeg(yref.angle(vec.normalized()))
-				tan = self.toDeg(i.data["RADIUS"]/vec.length)
-				if tan < 2:
-					tan = 2
-				if ang < tan and ang < x:
-					x = ang
-					t = i
+		b = False
+		all = self.getAllEvents("BACON", "PING")
+		for evt in all:
+			cls = evt.sender
+			obj = cls.owner
+			name = evt.getProp("NAME", "")
+			dist = evt.getProp("RADIUS", 1)
 
-		evt = self.getFirstEvent("DOCKING", "STARFIGHTER", "PUNCHIT")
-		if t != None:
-			hud.color = (0,1,0,1)
-			if evt != None:
-				pos = t.owner.worldPosition+base.ORIGIN_OFFSET
-				vec = t.owner.worldPosition-owner.worldPosition
-				pos -= vec.normalized()*t.data["RADIUS"]
+			vec = obj.worldPosition-owner.worldPosition
+			chk = vec.normalized()
+			rad = yref.angle(chk)
+			ang = self.toDeg(rad)
+			tan = self.toDeg(dist/vec.length)
+			ass = math.sin(rad)*vec.length
+
+			if tan < 2 and ang < 2:
+				ass = 0
+
+			pad = dist+(self.SPEED*2)
+			if vec.length < pad and ass < pad and ang < 90:
+				b = True
+				hud.color = (0,0,0,1)
+				owner["TARGET"] = name+" - CLOSE"
+
+			if ass < dist and ang < 90:
+				if v == None or (vec.length < v or ang < x):
+					z = 0
+					for col in all:
+						cn = col.getProp("NAME", "")
+						cd = col.getProp("RADIUS", 1)
+						ce = col.getProp("ARRIVE", cd)
+						cv = col.sender.owner.worldPosition-owner.worldPosition
+						cr = cv.normalized().angle(chk)
+						ca = math.sin(cr)*cv.length
+						if col != evt and cv.length < vec.length-ce and ca < cd and self.toDeg(cr) < 90:
+							z += 1
+							hud.color = (1,0,0,1)
+							owner["TARGET"] = name+" - BLOCKED: "+cn
+					if z == 0:
+						x = ang
+						v = vec.length
+						t = evt
+						owner["TARGET"] = name
+
+		act = self.getFirstEvent("DOCKING", "STARFIGHTER", "PUNCHIT")
+		evt = self.getFirstEvent("DOCKING", "STARFIGHTER", "RELEASE")
+
+		if evt != None:
+			if self.timer <= -30:
+				self.stateSwitch("RELEASE")
+				return
+			elif self.timer < 0:
+				self.timer -= 1
+				h = (self.timer/-30)*0.5
+				hud.color = (0.5-h, 0.5-h, 0.5-h, 1)
+
+		elif t != None:
+			cls = t.sender
+			obj = cls.owner
+			name = t.getProp("NAME", "")
+			dist = t.getProp("RADIUS", 1)
+			targ = t.getProp("ARRIVE", dist)
+			chk = t.getProp("BLOCK", dist)
+
+			vec = obj.worldPosition-owner.worldPosition
+
+			if vec.length < chk+(self.SPEED*2) or name == "":
+				#if act != None:
+				hud.color = (1,1,0,1)
+				act = None
+			else:
+				hud.color = (0,1,0,1)
+
+			if act != None:
+				pos = obj.worldPosition+base.ORIGIN_OFFSET
+				pos -= vec.normalized()*targ
+
 				self.data["BACON"] = list(pos)
+				self.data["RELEASE"] = t.getProp("RELEASE", True)
 				self.stateSwitch("TRAVEL")
 				return
+			else:
+				self.timer = -1
 
-		release = False
-		evt = self.getFirstEvent("DOCKING", "STARFIGHTER", "RELEASE")
-		if evt != None:
-			release = True
+		elif act != None:
+			if self.timer >= 60:
+				self.data["BACON"] = None
+				self.data["RELEASE"] = False
+				self.stateSwitch("TRAVEL")
+				return
+			elif b == False:
+				self.timer += 1
+				h = (self.timer/60)*0.5
+				hud.color = (0.5+h, 0.5-h, 0.5+h, 1)
+				return
 
-		if release == True:
-			self.stateSwitch("RELEASE")
-			return
+		else:
+			self.timer = -1
 
-		evt = self.getFirstEvent("INPUT", "STARFIGHTER")
-		if evt != None:
-			X, Y, Z = evt.getProp("ROTATE", [0,0,0])
-			owner.worldOrientation = owner.worldOrientation*self.createMatrix(rot=(X,Y,Z), deg=False)
+		all = self.getAllEvents("INPUT", "STARFIGHTER")
+		for evt in all:
+			rot = self.createMatrix(rot=evt.getProp("ROTATE", [0,0,0]), deg=False)
+			owner.worldOrientation = owner.worldOrientation*rot
 
 	def ST_Travel(self):
 		owner = self.owner
+		hud = self.objects["HUD"]
 
 		if self.gfx == None:
 			self.gfx = owner.scene.addObject("GFX_Hyper", owner, 0)
 			self.gfx.setParent(owner, False, False)
+			self.gfx.localPosition = (0,1,0)
+
+		self.gfx.localOrientation = self.gfx.localOrientation.lerp(self.createMatrix(), 0.3)
 
 		self.gfx["FRAME"] = self.data["FRAME"]
 
-		pos = self.createVector(vec=self.data["BACON"])
-		vec = pos-(owner.worldPosition+base.ORIGIN_OFFSET)
 		fac = (self.data["FRAME"]/60)**2
 		if fac > 1:
 			fac = 1
+
+		if self.data["BACON"] != None:
+			pos = self.createVector(vec=self.data["BACON"])
+			vec = pos-(owner.worldPosition+base.ORIGIN_OFFSET)
+		else:
+			vec = owner.getAxisVect((0,self.SPEED*60,0))
+			fac *= 0.2
+
+			hud.color = (1, 0, 1, 1)
+
+			all = self.getAllEvents("INPUT", "STARFIGHTER")
+			for evt in all:
+				rsc = self.createVector(vec=evt.getProp("ROTATE", [0,0,0]))
+				rot = self.createMatrix(rot=rsc*0.3, deg=False)
+				vec = vec*rot
+				if 60 <= self.data["FRAME"] < 65:
+					owner.worldOrientation = owner.worldOrientation*rot
+					self.gfx.localOrientation = self.gfx.localOrientation*rot
+
+		all = self.getAllEvents("BACON", "PING")
+		for evt in all:
+			cls = evt.sender
+			obj = cls.owner
+			dist = evt.getProp("RADIUS", 1)
+			exit = evt.getProp("ARRIVE", dist)
+
+			chk = obj.worldPosition-owner.worldPosition
+			rad = vec.normalized().angle(chk.normalized())
+			ang = self.toDeg(rad)
+			tan = self.toDeg(dist/chk.length)
+			ass = math.sin(rad)*chk.length
+
+			if 60 <= self.data["FRAME"] < 65 and ang < 90:
+				pad = (dist+(self.SPEED*60*fac))
+				if ass < dist:
+					hud.color = (1, 0, 0, 1)
+				if ((chk.length < pad and ass < pad) or chk.length < pad) and self.data["BACON"] == None:
+					self.data["FRAME"] = 70
+					self.data["RELEASE"] = False
+
+		evt = self.getFirstEvent("DOCKING", "STARFIGHTER", "RELEASE")
+
+		if 60 <= self.data["FRAME"] < 65:
+			if self.timer >= 30:
+				self.data["FRAME"] = 70
+				self.data["RELEASE"] = False
+				hud.color = (1, 0, 0, 1)
+			elif evt != None:
+				self.timer += 1
+				h = (self.timer/30)*0.5
+				hud.color = (1-h, h, 1-h, 1)
+			else:
+				self.timer = 0
+		elif self.data["FRAME"] >= 60:
+			hud.color = (0.5, 0.5, 0.5, 1)
+			self.timer = 0
 
 		if self.data["FRAME"] < 60 or self.data["FRAME"] > 65:
 			self.data["FRAME"] += 1
@@ -203,13 +378,16 @@ class HyperRing(base.CoreObject):
 
 		owner.worldPosition += vec.normalized()*self.SPEED*fac
 
-		if vec.length <= self.SPEED*2:
+		if vec.length <= self.SPEED*fac or self.data["FRAME"] >= 100:
 			self.gfx.endObject()
 			self.gfx = None
 			self.objects["Fire"].color = (1,1,0,1)
-			self.stateSwitch("RELEASE")
+			if self.data["RELEASE"] == True:
+				self.stateSwitch("RELEASE")
+			else:
+				self.stateSwitch("ACTIVE")
 		else:
-			owner.alignAxisToVect(vec, 1, 0.1)
+			owner.alignAxisToVect(vec.normalized(), 1, 0.1)
 			self.objects["Fire"].color = (1,1,1,1)
 
 	def ST_Docking(self):
@@ -247,9 +425,11 @@ class Starfighter(vehicle.CoreAircraft):
 	INVENTORY = {"Cannon_L":"WP_LaserCannon", "Cannon_R":"WP_LaserCannon"}
 	SLOTS = {"ONE":"Cannon_L", "TWO":"Cannon_R"}
 
-	CAM_RANGE = (4, 16)
-	CAM_ZOOM = 3
+	CAM_RANGE = (8, 14)
+	CAM_STEPS = 3
+	CAM_ZOOM = 1
 	CAM_MIN = 1
+	CAM_HEIGHT = 0.15
 	#CAM_SLOW = 3
 	CAM_HEAD_G = 40
 
@@ -271,7 +451,7 @@ class Starfighter(vehicle.CoreAircraft):
 		"Wheel_RL": {"REAR":True, "LEFT":True} }
 
 	SEATS = {
-		"Seat_1": {"NAME":"Pilot", "DOOR":"Root", "CAMERA":[0,-1.75,0.65], "ACTION":"SeatLow", "VISIBLE":True, "SPAWN":[-1.5,-2.5,0]} }
+		"Seat_1": {"NAME":"Pilot", "DOOR":"Root", "CAMERA":[0,-1.75,0.65], "ACTION":"SeatLow", "VISIBLE":True, "SPAWN":[-1.5,-2.5,0.4]} }
 
 	AERO = {"POWER":10000, "REVERSE":0.2, "HOVER":500, "LIFT":0, "TAIL":0, "DRAG":(2,0.5,2)}
 
@@ -649,10 +829,13 @@ class Starfighter(vehicle.CoreAircraft):
 			self.sendEvent("DOCKING", cls, "STARFIGHTER", "PUNCHIT")
 
 		else:
-			rot = [torque[0]/100, torque[1]/100, torque[2]/100]
-			self.sendEvent("INPUT", cls, "STARFIGHTER", ROTATE=rot)
+			self.sendEvent("INPUT", cls, "STARFIGHTER", ROTATE=(torque[0]/100, 0, 0))
+			self.sendEvent("INPUT", cls, "STARFIGHTER", ROTATE=(0, torque[1]/100, 0))
+			self.sendEvent("INPUT", cls, "STARFIGHTER", ROTATE=(0, 0, torque[2]/100))
 
 		self.data["LANDSTATE"] = "FLYLOCK"
+
+		mesh.color[1] += (0-mesh.color[1])*0.02
 
 		self.data["HUD"]["Power"] = 0
 		self.data["HUD"]["Lift"] = 0
@@ -676,6 +859,9 @@ class Starfighter(vehicle.CoreAircraft):
 	def ST_Enter(self):
 		self.setWheelBrake(10, "REAR")
 		self.doCameraToggle()
+
+		mesh = self.objects["Fire"]
+		mesh.color[1] += (1-mesh.color[1])*0.01
 
 		self.data["GLASSFRAME"] -= 1
 		if self.data["GLASSFRAME"] <= 0:
@@ -722,7 +908,7 @@ class SpeederHUD(HUD.CoreHUD):
 class LayoutSpeeder(HUD.HUDLayout):
 
 	GROUP = "Core"
-	MODULES = [HUD.Stats, SpeederHUD, HUD.MousePos, HUD.Compass]
+	MODULES = [HUD.Stats, HUD.Aircraft, HUD.MousePos]
 
 
 class LandSpeeder(vehicle.CoreAircraft):
@@ -763,8 +949,11 @@ class LandSpeeder(vehicle.CoreAircraft):
 		super().applyModifier(dict)
 
 	def gravRepulsor(self):
-		dampLin = 0.5
+		dampLin = 0.6
 		dampRot = 0.8
+		if self.active_state == self.ST_Idle:
+			dampLin = 0.9
+			dampRot = 0.9
 
 		self.owner.setDamping(dampLin, dampRot)
 
@@ -791,6 +980,12 @@ class LandSpeeder(vehicle.CoreAircraft):
 		rayto = orgn+zref
 		zfac = 0
 
+		fz = (self.motion["Force"][2]*0.2)+1.0
+		if fz > 1 and linv.length > 1:
+			fz *= 100*linv.length
+
+		href = href*fz
+
 		down, pnt, nrm = owner.rayCast(rayto, rayfrom, href*2, "GROUND", 1, 1, 0)
 
 		if down != None:
@@ -807,7 +1002,10 @@ class LandSpeeder(vehicle.CoreAircraft):
 			if angle < 50:
 				align = nrm
 
-		self.gndnrm = self.gndnrm.slerp(align, 0.03)
+		if self.toDeg(self.gndnrm.angle(align)) < 50:
+			self.gndnrm = self.gndnrm.slerp(align, 0.03)
+		else:
+			self.gndnrm = -self.gravity.normalized()
 
 		tval = self.motion["Torque"][2]*-0.5*linv.length
 		if owner.localLinearVelocity[1] < 0:
@@ -827,7 +1025,7 @@ class LandSpeeder(vehicle.CoreAircraft):
 		align = (self.gndnrm+tilt).normalized()
 		owner.alignAxisToVect(align, 2, 1.0)
 
-		owner.applyForce(owner.getAxisVect([0,0,1])*hover.length, False)
+		owner.applyForce(-self.gravity.normalized()*hover.length, False)
 
 		self.data["HUD"]["Lift"] = zfac*50
 
@@ -858,9 +1056,27 @@ class LandSpeeder(vehicle.CoreAircraft):
 	def ST_Startup(self):
 		#self.gimbal = self.owner.scene.addObject("Gimbal", self.owner, 0)
 		self.gndtilt = 0
+		self.env_dim = None
 		self.gndnrm = self.createVector(vec=(0,0,1))
 		self.active_pre.append(self.gravRepulsor)
 		self.toggleWeapons(self.data["ATTACKMODE"])
+		self.active_post.append(self.PS_Ambient)
+
+	def applyContainerProps(self, cls):
+		super().applyContainerProps(cls)
+		cls.env_dim = list(self.objects["Mesh"].color)
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+
+		self.env_dim = None
 
 	## ACTIVE STATE ##
 	def ST_Active(self):
@@ -884,10 +1100,14 @@ class LandSpeeder(vehicle.CoreAircraft):
 		if yaw > 1:
 			yaw = 1
 
+		frz = 0
+		if force[2] > 0:
+			frz = force[2]*owner.mass*self.gravity.length*0.5
 		tqz = self.gndnrm*yaw*15
 
+		spd = ((force[2]*-0.2)+1.2)
 		owner.applyTorque(tqz, False)
-		owner.applyForce([0.0, power-(linV[1]*5*fac), 0], True)
+		owner.applyForce([0.0, (power*spd)-(linV[1]*5*fac), frz], True)
 
 		## EXTRAS ##
 		mesh = self.objects["Fire"]
@@ -907,7 +1127,7 @@ class LandSpeeder(vehicle.CoreAircraft):
 			else:
 				self.data["COOLDOWN"] -= 1
 
-		if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 1:
+		if keymap.BINDS["ENTERVEH"].tap() == True and linV.length < 10:
 			self.data["COOLDOWN"] = 10
 			self.stateSwitch("IDLE")
 
@@ -957,7 +1177,7 @@ class Ahsoka(characters.TRPlayer):
 	SLOTS = {"FOUR":"Shoulder_L", "FIVE":"Back", "SIX":"Shoulder_R"}
 	OFFSET = (0, 0.03, 0.14)
 	SPEED = 0.12
-	JUMP = 7
+	JUMP = 5
 	GND_H = 1.0
 	EYE_H = 1.535
 	EDGE_H = 1.93
@@ -1113,7 +1333,7 @@ class Ahsoka(characters.TRPlayer):
 		## Jump/Crouch ##
 		if self.jump_timer >= 2:
 			if keymap.BINDS["PLR_JUMP"].active() == False or self.jump_timer >= 100:
-				j = 3.0+(self.jump_timer*0.1)
+				j = 4+(self.jump_timer*0.1)
 				self.doJump(height=j, move=1.0, align=True)
 		elif keymap.BINDS["PLR_DUCK"].active() == True and ac != "PLACE":
 			self.doCrouch(True)
@@ -1139,7 +1359,7 @@ class Ahsoka(characters.TRPlayer):
 						cls = self.raycls
 						obj = self.rayhit[0]
 						grav = cls.gravity
-						self.sendEvent("MODIFIERS", cls, IMPULSE=grav.length)
+						self.sendEvent("FORCE", cls, "GRAVITY", IMPULSE=grav.length)
 						if obj.getPhysicsId() != 0:
 							obj.applyForce(-grav*obj.mass, False)
 							vref = viewport.getDirection((move[0], move[1], climb*0.5))*1

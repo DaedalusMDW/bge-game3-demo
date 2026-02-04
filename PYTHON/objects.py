@@ -18,6 +18,7 @@ class PhysicsObject(SceneObject):
 
 	NAME = ""
 	PHYSICS = "RIGID"
+	PORTAL = True
 
 	def ST_Startup(self):
 		self.addCollisionCallBack()
@@ -259,6 +260,8 @@ class MachineGun(weapon.CorePlayerWeapon):
 
 		plr = self.owning_player
 		plrobj = plr.objects["Root"]
+		if plrobj == None:
+			return
 
 		vec = viewport.getRayVec()
 
@@ -388,6 +391,8 @@ class HandGun(weapon.CorePlayerWeapon):
 
 		plr = self.owning_player
 		plrobj = plr.objects["Root"]
+		if plrobj == None:
+			return
 
 		vec = viewport.getRayVec()
 
@@ -400,7 +405,7 @@ class HandGun(weapon.CorePlayerWeapon):
 		sec_tap = self.getFirstEvent("WP_FIRE", "SECONDARY", "TAP")
 
 		mv = False
-		if plrobj.worldLinearVelocity.length*(1.60) > 0.01:
+		if plrobj.worldLinearVelocity.length*(1/60) > 0.01:
 			mv = True
 			sec = None
 			sec_tap = None
@@ -507,6 +512,7 @@ class GravGun(weapon.CorePlayerWeapon):
 		self.env_dim = None
 		self.target = None
 		self.gravlock = False
+		self.rot_ref = None
 		self.beam = 100
 		self.wp_id = None
 
@@ -553,6 +559,7 @@ class GravGun(weapon.CorePlayerWeapon):
 		barrel = self.objects["Barrel"]
 
 		plr = self.owning_player
+		slot = self.owning_slot
 		plrobj = plr.objects["Root"]
 
 		vec = viewport.getRayVec()
@@ -577,24 +584,28 @@ class GravGun(weapon.CorePlayerWeapon):
 					self.data["HUD"]["Text"] = self.target.NAME
 					self.data["HUD"]["Stat"] = round((self.beam/30)*100)
 
-					self.gimbal.visible = True
 					if keymap.BINDS["WP_UP"].tap() == True and self.beam < 30:
 						self.beam += 1
 					if keymap.BINDS["WP_DOWN"].tap() == True and self.beam > 5:
 						self.beam -= 1
 
+					## Forces ##
 					pos = barrel.worldPosition+(vec.normalized()*self.beam)
 					tgt = self.target.getOwner()
 
 					force = pos-tgt.worldPosition
 					tgt.applyForce(force*tgt.mass)
 
+					torque = self.gimbal.worldOrientation.inverted()*tgt.worldOrientation
+					torque = self.createVector(vec=torque.to_euler())
+					tgt.applyTorque(-torque*tgt.mass, True)
+
 					## Gravity Negate ##
 					grav = owner.scene.gravity
 					cls = tgt.get("Class", None)
 					if cls != None and cls.invalid != True:
 						grav = cls.gravity
-						self.sendEvent("MODIFIERS", cls, IMPULSE=grav.length)
+						self.sendEvent("FORCE", cls, "GRAVITY", IMPULSE=grav.length)
 						tgt.applyForce(-grav*tgt.mass, False)
 
 					## Damping ##
@@ -605,21 +616,39 @@ class GravGun(weapon.CorePlayerWeapon):
 						mx = 0
 					tgt.applyForce(-LV*mx*tgt.mass, True)
 
+					## Gimbal ##
 					self.gimbal.worldPosition = pos
+					self.gimbal.visible = True
+
+					if sec != None:
+						if self.rot_ref == None:
+							self.rot_ref = camera.worldOrientation.inverted()*self.gimbal.worldOrientation
+						self.gimbal.worldOrientation = camera.worldOrientation*self.rot_ref
+					else:
+						self.rot_ref = None
+
+					wd = plr.data["WPDATA"]
+					cd = wd["WHEEL"][self.TYPE]
+
+					wd["CURRENT"] = self.TYPE
+					cd["ID"] = cd["LIST"].index(slot)
 
 			elif sec != None and plr.raycls != None:
-				pos = plr.raycls.getOwner().worldPosition
+				tgt = plr.raycls.getOwner()
+				pos = tgt.worldPosition
+				ori = tgt.worldOrientation
 				ref = plr.owner.worldPosition-pos
 
 				if ref.length < 30:
 					self.data["HUD"]["Text"] = plr.raycls.NAME
 					self.data["HUD"]["Stat"] = round((ref.length/30)*100)
 
-					if pri_tap != None and plr.raycls.getOwner().getPhysicsId() != 0:
+					if pri_tap != None and tgt.getPhysicsId() != 0:
 						self.target = plr.raycls
 						self.gravlock = True
 						self.beam = round(ref.length)
 						self.gimbal.worldPosition = pos
+						self.gimbal.worldOrientation = ori
 
 				else:
 					self.data["HUD"]["Text"] = "OUT OF RANGE"

@@ -19,6 +19,7 @@ class LayoutCinema(HUD.HUDLayout):
 
 class CoreMission(base.CoreObject):
 
+	CONTAINER = "LOCK"
 	HUDLAYOUT = LayoutCinema
 
 	def defaultData(self):
@@ -83,7 +84,7 @@ class SwitchPlayer(CoreMission):
 
 			self.active_state = self.ST_Empty
 
-			print("SPAWN WARNING: Player Switch object -", name)
+			print("SPAWN WARNING: Player Switch object is active -", name)
 		else:
 			self.chars["CUR"] = scene.addObject(name, owner, 0)
 			self.chars["CUR"]["DICT"] = base.PROFILE["PLRData"].get(name, {"Object":name, "Data":None})

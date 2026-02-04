@@ -103,6 +103,31 @@ def CHECKPOINT_LOAD(cont):
 	owner["COLLIDE"] = []
 
 
+# Raycast Clicker
+def CLICKER(cont):
+
+	owner = cont.owner
+
+	owner["CLICK"] = False
+	if  owner.get("RAYCAST", None) != None:
+		if keymap.BINDS["ACTIVATE"].tap():
+			owner["CLICK"] = True
+
+	if base.LEVEL != None:
+		chk = owner.get("SAVE", "")
+
+		for prop in owner.getPropertyNames():
+			if prop in chk:
+				if "_LOAD" not in owner and ("_CLICKER_"+prop) in base.LEVEL:
+					owner[prop] = base.LEVEL["_CLICKER_"+prop]
+				else:
+					base.LEVEL["_CLICKER_"+prop] = owner[prop]
+
+		owner["_LOAD"] = True
+
+	owner["RAYCAST"] = None
+
+
 # Teleport
 def TELEPORT(cont):
 
@@ -110,7 +135,7 @@ def TELEPORT(cont):
 	scene = owner.scene
 
 	if "GFX" not in owner:
-		owner.setVisible(False, False)
+		owner.visible = False
 		if "GFX_Teleport" not in scene.objectsInactive:
 			return
 		owner["ANIM"] = 0
@@ -139,15 +164,28 @@ def TELEPORT(cont):
 				cls.teleportTo(target.worldPosition.copy(), target.worldOrientation.copy())
 
 	if len(owner["COLLIDE"]) > 0:
-		if owner["ANIM"] == 0:
-			if owner["GFX"].isPlayingAction(0) == False:
-				owner["GFX"].playAction("GFX_Teleport", 0, 20)
-				owner["ANIM"] = 1
+		owner["ANIM"] += 1
+		if owner["ANIM"] > 20:
+			owner["ANIM"] = 20
+	else:
+		owner["ANIM"] -= 1
+		if owner["ANIM"] <= 0:
+			owner["ANIM"] = -1
 
-	elif owner["ANIM"] == 1:
-		if owner["GFX"].isPlayingAction(0) == False:
-			owner["GFX"].playAction("GFX_Teleport", 20, 0)
-			owner["ANIM"] = 0
+	dist = scene.active_camera.worldPosition-owner.worldPosition
+
+	if dist.length > owner.get("DIST", 100):
+		owner["GFX"].visible = False
+		owner["HALO"].visible = False
+	else:
+		owner["GFX"].visible = True
+		owner["HALO"].visible = True
+
+	if owner["ANIM"] >= 0 and owner["GFX"].visible == True:
+		owner["GFX"].playAction("GFX_Teleport", -5, 25, 0, 0, 5, logic.KX_ACTION_MODE_LOOP)
+		owner["GFX"].setActionFrame(owner["ANIM"], 0)
+	else:
+		owner["GFX"].stopAction(0)
 
 	owner["COLLIDE"] = []
 
@@ -390,9 +428,12 @@ def SKY(cont):
 
 	owner = cont.owner
 	scene = owner.scene
+	camera = scene.active_camera
 
-	owner.worldPosition[0] = scene.active_camera.worldPosition[0]
-	owner.worldPosition[1] = scene.active_camera.worldPosition[1]
+	vec = owner.worldPosition-camera.worldPosition
+
+	owner.worldPosition[0] = camera.worldPosition[0]
+	owner.worldPosition[1] = camera.worldPosition[1]
 
 
 # Define Shadow Tracking Functions
@@ -402,18 +443,23 @@ def SUN(cont):
 	scene = owner.scene
 
 	Z = owner.get("Z", None)
+	D = owner.get("D", 8)
 
 	if viewport.VIEWCLASS != None and scene.active_camera == viewport.getObject("Camera"):
 		wp = viewport.VIEWCLASS.getWorldPosition()
 	else:
 		wp = scene.active_camera.worldPosition
 
+	vec = wp-owner.worldPosition
+
 	if Z == False or Z == None:
-		owner.worldPosition[0] = wp[0]
-		owner.worldPosition[1] = wp[1]
+		if abs(vec[0]) > D or abs(vec[1]) > D:
+			owner.worldPosition[0] = wp[0]
+			owner.worldPosition[1] = wp[1]
 
 	if Z == True or Z == None:
-		owner.worldPosition[2] = wp[2]
+		if abs(vec[2]) > D:
+			owner.worldPosition[2] = wp[2]
 
 
 # Grass Builder
@@ -857,62 +903,5 @@ def REFL(cont):
 			cube.renderer.update()
 
 	owner.setVisible(False, True)
-
-
-# Define Texture UV Panning Functions
-def UVT(cont):
-
-	owner = cont.owner
-	scene = owner.scene
-
-	mesh = owner.meshes[0]
-
-	if owner.get("MATID", None) == None:
-		owner["MATID"] = 0
-		for id in range(len(mesh.materials)):
-			if mesh.getMaterialName(id) == "MAWater":
-				owner["MATID"] = id
-
-	TX = owner["TX"]*0.001
-	TY = owner["TY"]*0.001
-
-	owner["UVX"] += abs(TX)
-	owner["UVY"] += abs(TY)
-
-	if owner["UVX"] > 0.99:
-		TX = -1
-		owner["UVX"] = 0.0
-	if owner["UVY"] > 0.99:
-		TY = -1
-		owner["UVY"] = 0.0
-
-	scale = [owner.get("SCALEX", None), owner.get("SCALEY", None)]
-
-	if scale[0] == "RESET":
-		s = owner.worldScale
-		print(s)
-		scale[0] = s[0]
-	if scale[1] == "RESET":
-		s = owner.worldScale
-		print(s)
-		scale[1] = s[1]
-
-	for v_id in range(mesh.getVertexArrayLength(owner["MATID"])):
-		vertex = mesh.getVertex(owner["MATID"], v_id)
-
-		if scale[0] != None:
-			vertex.u  *= scale[0]
-			vertex.u2 *= scale[0]
-		vertex.u  += TX
-		vertex.u2 += TX
-		if scale[1] != None:
-			vertex.v  *= scale[1]
-			vertex.v2 *= scale[1]
-		vertex.v  += TY
-		vertex.v2 += TY
-
-	owner["SCALEX"] = None
-	owner["SCALEY"] = None
-
 
 

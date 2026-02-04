@@ -47,7 +47,7 @@ class Gateship(vehicle.CoreAircraft):
 	CAM_STEPS = 3
 	CAM_HEIGHT = 0.1
 	CAM_MIN = 1.0
-	CAM_SLOW = 3.0
+	CAM_SLOW = 5.0
 	CAM_HEAD_G = 0
 	CAM_OFFSET = (0,0,1)
 
@@ -71,12 +71,12 @@ class Gateship(vehicle.CoreAircraft):
 		"Wheel_RL": {"REAR":True, "LEFT":True} }
 
 	SEATS = {
-		"Seat_B": {"NAME":"Ramp",    "DOOR":"Door_1", "CAMERA":[0,0,0], "VISIBLE":False, "SPAWN":[0,-6,-0.3], "STATE":"WALKING"},
-		"DHD":    {"NAME":"DHD",     "DOOR":"DHD",    "CAMERA":[0,2.3,0.5], "VISIBLE":False, "SPAWN":[0,0,0], "STATE":"DHD"},
-		"Seat_1": {"NAME":"Pilot",   "DOOR":"Seat_1", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"DRIVER"},
-		"Seat_2": {"NAME":"CoPilot", "DOOR":"Seat_2", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"},
-		"Seat_3": {"NAME":"Support", "DOOR":"Seat_3", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"},
-		"Seat_4": {"NAME":"Support", "DOOR":"Seat_4", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTall", "VISIBLE":True, "SPAWN":[0,0,0], "STATE":"PASSIVE"}
+		"Seat_B": {"NAME":"Ramp",    "DOOR":"Door_1", "CAMERA":[0,0,0], "VISIBLE":False, "STATE":"WALKING", "COLLIDE":True},
+		"DHD":    {"NAME":"DHD",     "DOOR":"DHD",    "CAMERA":[0,2.3,0.5], "VISIBLE":False, "STATE":"DHD"},
+		"Seat_1": {"NAME":"Pilot",   "DOOR":"Seat_1", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTallP", "VISIBLE":True, "STATE":"DRIVER"},
+		"Seat_2": {"NAME":"CoPilot", "DOOR":"Seat_2", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTallP", "VISIBLE":True, "STATE":"PASSIVE"},
+		"Seat_3": {"NAME":"Support", "DOOR":"Seat_3", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTallP", "VISIBLE":True, "STATE":"PASSIVE"},
+		"Seat_4": {"NAME":"Support", "DOOR":"Seat_4", "CAMERA":[0,0.1,0.75], "ACTION":"SeatTallP", "VISIBLE":True, "STATE":"PASSIVE"}
 		}
 
 	AERO = {"POWER":20000, "REVERSE":1.0, "HOVER":0, "LIFT":0, "TAIL":0, "DRAG":(1,1,1)}
@@ -127,10 +127,12 @@ class Gateship(vehicle.CoreAircraft):
 	def airLift(self):
 		owner = self.objects["Root"]
 
-		grav = -self.gravity
+		grav = self.gravity
 		mass = owner.mass
 
-		owner.applyForce(grav*mass, False)
+		evt = self.getFirstEvent("FORCE", "GRAVITY")
+		if evt == None:
+			owner.applyForce(-grav*mass, False)
 
 		if self.data["MODE"] == "OPEN":
 			return
@@ -139,7 +141,7 @@ class Gateship(vehicle.CoreAircraft):
 		rayobj = owner.rayCastTo(rayto, 1.6, "GROUND")
 
 		if rayobj != None and self.motion["Force"][2] < 0.01:
-			owner.applyForce([0,0,-mass], True)
+			owner.applyForce([0,0,-mass*(evt==None)], True)
 			self.setWheelBrake(1, "REAR")
 
 	def setCameraState(self, state=None):
@@ -184,6 +186,27 @@ class Gateship(vehicle.CoreAircraft):
 		else:
 			HUD.SetLayout(self, None)
 
+	def removeFromSeat(self, key, force=False):
+		owner = self.getOwner()
+
+		cls = self.player_seats[key]
+		if cls == None:
+			if self.driving_seat == key:
+				self.driving_seat = None
+			return True
+
+		spawn = self.getWorldSpace(owner, (0, -6, -0.3))
+
+		ori = owner.worldOrientation.copy()
+
+		cls.exitVehicle(spawn, ori)
+		cls.removeContainerParent()
+		cls.data["LINVEL"] = list(owner.localLinearVelocity)
+
+		self.player_seats[key] = None
+
+		return True
+
 	def stateSwitch(self, state=None):
 		if state != None:
 			pass
@@ -196,9 +219,14 @@ class Gateship(vehicle.CoreAircraft):
 		self.motion["Rotate"] = self.createVector()
 
 		if state == "IDLE":
-			if self.removeFromSeat(self.driving_seat) == True:
-				self.driving_seat = None
-				self.active_state = self.ST_Idle
+			self.data["WALK"] = -3
+
+			for seat in self.player_seats:
+				if self.removeFromSeat(seat) == True:
+					if self.driving_seat == seat:
+						self.driving_seat = None
+
+			self.active_state = self.ST_Idle
 
 		elif state == "DRIVER":
 			self.assignCamera(self.seatobj[self.driving_seat], "SEAT")
@@ -251,9 +279,9 @@ class Gateship(vehicle.CoreAircraft):
 			self.doAnim(obj, SET=self.data["FRAMES"])
 
 		if self.data["DOORSTATE"] == "OPENING":
-			self.data["DOORFRAMES"] += 1
+			self.data["DOORFRAMES"] += 2
 		elif self.data["DOORSTATE"] == "CLOSING":
-			self.data["DOORFRAMES"] -= 1
+			self.data["DOORFRAMES"] -= 2
 		if self.data["DOORFRAMES"] <= 0:
 			self.data["DOORSTATE"] = "CLOSED"
 			self.data["DOORFRAMES"] = 0
@@ -265,17 +293,20 @@ class Gateship(vehicle.CoreAircraft):
 		self.doAnim("Door", SET=self.data["DOORFRAMES"])
 
 		for key in ["Seat_1", "Seat_2", "Seat_3", "Seat_4"]:
+			frames = self.data["SEATFRAMES"]
 			x = -1
-			if key == self.driving_seat and self.active_state != self.ST_Wait:
+			if self.player_seats[key] != None and self.active_state != self.ST_Wait:
 				x = 1
-			self.data["SEATFRAMES"][key] = self.data["SEATFRAMES"].get(key, 0)+x
-			if self.data["SEATFRAMES"][key] < 0:
-				self.data["SEATFRAMES"][key] = 0
-			if self.data["SEATFRAMES"][key] > 60:
-				self.data["SEATFRAMES"][key] = 60
+			if self.active_state == self.ST_Walking and 1 > frames[key] > 59:
+				x = 0
+			frames[key] = frames.get(key, 0)+x
+			if frames[key] < 0:
+				frames[key] = 0
+			if frames[key] > 60:
+				frames[key] = 60
 			obj = self.objects[key]
 			self.doAnim(obj, "NONE", (-5,65), MODE="LOOP")
-			self.doAnim(obj, SET=self.data["SEATFRAMES"][key])
+			self.doAnim(obj, SET=frames[key])
 
 		for key in ["Col_L", "Col_R", "Col_D"]:
 			obj = self.objects[key]
@@ -288,7 +319,23 @@ class Gateship(vehicle.CoreAircraft):
 			obj.localOrientation = ori
 
 	def ST_Idle(self):
-		if self.checkClicked() == True:
+		all = self.getAllEvents("INTERACT", "SEND")
+		act = self.getAllEvents("INTERACT", "ACTOR", "TAP")
+		sec = self.getAllEvents("INTERACT", "!ACTOR", "!SEND", "!RECEIVE")
+
+		stop = False
+
+		for evt in act:
+			cls = evt.sender
+			if cls.player_id == "1":
+				continue
+
+			for key in ["Seat_2", "Seat_3", "Seat_4"]:
+				if self.player_seats[key] == None and cls.dict.get("Vehicle", None) == None:
+					self.attachToSeat(cls, key)
+					stop = True
+
+		if stop == False and self.checkClicked() == True:
 			self.stateSwitch()
 
 	def ST_Walking(self):
@@ -331,11 +378,15 @@ class Gateship(vehicle.CoreAircraft):
 			rayto = obj.worldPosition
 			tvec = owner.worldOrientation.inverted()*(rayto-rayfrom)
 			angle = self.toDeg(rvec.angle(tvec))
-			if angle < 30 and angle < x and tvec.length < 2:
-				key = i
-				self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
-				self.data["HUD"]["Color"] = (0,1,0,1)
-				x = angle
+			if angle < 30 and angle < x and (tvec.length < 2 or i == "Door_1"):
+				if self.player_seats.get(i, None) != None:
+					self.data["HUD"]["Text"] = "OCCUPIED"
+					self.data["HUD"]["Color"] = (1,0,0,1)
+				else:
+					key = i
+					self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
+					self.data["HUD"]["Color"] = (0,1,0,1)
+					x = angle
 
 		if key == "Door_1":
 			exit = (MOVE[1]<-0.1 and self.data["WALK"]<=-3)
@@ -349,6 +400,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		elif key != None and keymap.BINDS["ACTIVATE"].tap() == True:
 			self.attachToSeat(self.player_seats[self.driving_seat], key)
+			self.player_seats[self.driving_seat] = None
 			self.driving_seat = key
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
@@ -364,6 +416,7 @@ class Gateship(vehicle.CoreAircraft):
 		exit = False
 		#if keymap.BINDS["ENTERVEH"].tap() == True:
 		#	self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+		#	self.player_seats[self.driving_seat] = None
 		#	self.driving_seat = "Seat_B"
 		#	self.stateSwitch()
 		#	exit = True
@@ -380,13 +433,18 @@ class Gateship(vehicle.CoreAircraft):
 			tvec = owner.worldOrientation.inverted()*(rayto-rayfrom)
 			angle = self.toDeg(rvec.angle(tvec))
 			if angle < 30 and angle < x:
-				key = i
-				self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
-				self.data["HUD"]["Color"] = (0,1,0,1)
-				x = angle
+				if self.player_seats[i] != None:
+					self.data["HUD"]["Text"] = "OCCUPIED"
+					self.data["HUD"]["Color"] = (1,0,0,1)
+				else:
+					key = i
+					self.data["HUD"]["Text"] = obj.get("RAYNAME", i)
+					self.data["HUD"]["Color"] = (0,1,0,1)
+					x = angle
 
 		if key != None and keymap.BINDS["ACTIVATE"].tap() == True:
 			self.attachToSeat(self.player_seats[self.driving_seat], key)
+			self.player_seats[self.driving_seat] = None
 			self.driving_seat = key
 			self.data["DOORSTATE"] = "CLOSING"
 			self.data["HUD"]["Target"] = None
@@ -433,6 +491,7 @@ class Gateship(vehicle.CoreAircraft):
 
 			elif obj == None and exit == False:
 				self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+				self.player_seats[self.driving_seat] = None
 				self.driving_seat = "Seat_B"
 				self.stateSwitch()
 
@@ -507,6 +566,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		if keymap.BINDS["ENTERVEH"].tap() == True or self.data["SEATFRAMES"].get(self.driving_seat, 0) <= 0:
 			self.attachToSeat(self.player_seats[self.driving_seat], "Seat_B")
+			self.player_seats[self.driving_seat] = None
 			self.driving_seat = "Seat_B"
 			self.stateSwitch()
 
@@ -730,13 +790,16 @@ class CoreGate(base.CoreObject):
 				plr = base.PLAYER_CLASSES.get(cur, None)
 
 		player = None
+		object = []
 
 		for hit in self.puddle["COLLIDE"]:
-			if getattr(hit, "PORTAL", None) == True and plr != None:
+			if getattr(hit, "PORTAL", None) == True and plr != None and hit != self:
 				if hit == plr:
 					player = hit
 				elif plr in hit.getChildren():
 					player = hit
+				else:
+					object.append(hit)
 
 			nrm = self.puddle.getAxisVect([0,-1,0])
 			vec = self.puddle.getVectTo(hit.owner)[1]
@@ -751,6 +814,17 @@ class CoreGate(base.CoreObject):
 
 		if player in self.back:
 			player = None
+
+		map = self.puddle.get("MAP", "")+".blend"
+		for cls in list(object):
+			if cls not in self.back and map in logic.globalDict["BLENDS"] and self.data["IRIS"]["State"] == "OPEN":
+				## LAUNDERING FIX ##
+				lp, lr = cls.getTransformDiff(self.puddle, cmp=True)
+				cls.dict["Zone"] = [lp, lr]
+				cls.dict["Zone"][0][1] *= -1
+				## END ##
+
+				world.sendObjects(map, "STARGATE", [cls])
 
 		for i in clr:
 			self.back.remove(i)

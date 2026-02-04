@@ -7,9 +7,9 @@ from game3 import config, input, keymap
 config.LIBRARIES = [
 	"CommonAssets",
 	"DemoContent",
-	"Zephyr",
+	"Zephyr1",
 	"StarWars",
-	#"Stargate",
+	"Stargate",
 ]
 
 config.LIBLOAD_TYPE = "NORMAL"

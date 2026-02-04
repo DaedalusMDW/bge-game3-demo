@@ -61,6 +61,12 @@ def BULLET(cont):
 
 			if cls != None:
 				cls.sendEvent("MODIFIERS", HEALTH=-dmg, POS=list(pnt), VEC=list(fwd), IMPULSE=dmg/4)
+			else:
+				obj.get("MODIFIERS", []).append({
+					"HEALTH":-dmg,
+					"POS":list(pnt),
+					"VEC":list(fwd),
+					"IMPULSE":dmg/4})
 
 		if dmg > 0:
 			if obj.getPhysicsId() != 0:
@@ -215,6 +221,12 @@ def BOMB(cont):
 			if cls != None:
 				cls.sendEvent("MODIFIERS", HEALTH=-dmg*fac, POS=list(owner.worldPosition), VEC=list(vec) , IMPULSE=vec.length)
 				cls.sendEvent("IMPULSE")
+			else:
+				obj.get("MODIFIERS", []).append({
+					"HEALTH":-dmg*fac,
+					"POS":list(owner.worldPosition),
+					"VEC":list(vec),
+					"IMPULSE":vec.length})
 			owner["HITLIST"].append(obj)
 
 	if dur <= 0:

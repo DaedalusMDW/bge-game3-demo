@@ -311,6 +311,7 @@ class ActorPlayer(player.CorePlayer):
 			self.sendEvent("INTERACT", evt.sender, "RECEIVE", TYPE="RAY")
 
 		flw = self.getFirstEvent("NPC", "FOLLOW", "LOOP")
+		grv = self.getFirstEvent("FORCE", "GRAVITY")
 
 		if self.data["NPC_LEAD"] == True:
 			act = self.getFirstEvent("INTERACT", "ACTOR")
@@ -358,7 +359,7 @@ class ActorPlayer(player.CorePlayer):
 			else:
 				self.npc_state -= 1
 
-			if self.npc_state == -1:
+			if self.npc_state == -1 or grv != None:
 				plr = None
 				vec = self.createVector()
 				vref = self.createVector()
@@ -420,7 +421,7 @@ class ActorPlayer(player.CorePlayer):
 
 		char["DEBUG2"] = self.npc_state
 
-		if ground != None:
+		if ground != None and grv == None:
 			if self.jump_state != "NONE":
 				self.jump_timer = 0
 				self.jump_state = "NONE"
@@ -711,11 +712,14 @@ class TRPlayer(ActorPlayer):
 		align.normalize()
 		align = owner.worldOrientation*align
 
+		lvz = owner.localLinearVelocity[2]
+		if lvz > 3:
+			lvz = 3
 		jump = axis.copy()
-		jump[2] += 1.25
+		jump[2] += 1.25+(lvz*0.5*(lvz>0))
 		jump.normalize()
 		jump = owner.worldOrientation*jump
-		owner.worldLinearVelocity = jump*self.JUMP*1.1
+		owner.worldLinearVelocity = jump*self.JUMP*1.4
 
 		self.alignPlayer(axis=align)
 
@@ -855,7 +859,13 @@ class TRPlayer(ActorPlayer):
 			if self.WALL_ALIGN == True:
 				self.doMoveAlign(axis=nrm*-1, up=False)
 			if self.data["WALLJUMPS"] == 0 or keymap.BINDS["TOGGLEMODE"].tap() == True or keymap.BINDS["PLR_JUMP"].tap() == True:
-				if self.data["ENERGY"] > 15:
+				dt = -1
+				if self.motion["Move"].length > 0.01:
+					move = self.motion["Move"].normalized()
+					vref = viewport.getDirection((move[0], move[1], 0))
+					dt = owner.getAxisVect((0,1,0)).dot(vref)
+
+				if self.data["ENERGY"] > 15 and dt < 0.5:
 					self.wallJump(nrm)
 					self.data["WALLJUMPS"] += 1
 		else:

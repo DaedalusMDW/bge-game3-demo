@@ -1,1 +1,1 @@
-bin64\u020\game3player.exe -m 8 -g fixedtime = 0 "Launcher.blend"
+bin64\u020\blenderplayer.exe -m 8 -g fixedtime = 0 "Launcher.blend"
