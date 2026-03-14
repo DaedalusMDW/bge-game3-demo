@@ -2,7 +2,7 @@
 
 from bge import logic
 
-from game3 import base, keymap, world, vehicle, viewport, HUD
+from game3 import base, keymap, world, vehicle, attachment, weapon, viewport, HUD
 
 
 if "STARGATE" not in base.WORLD:
@@ -15,19 +15,357 @@ ADDRESS = {
 	"MILKYWAY":{
 		"1A:1B:1C:1D:1E:1F:1P": "SGC Game",
 		"2A:2B:2C:2D:2E:2F:1P": "Abydos Game",
-		"1A:2B:1C:2D:1E:2F:1P": "SunlevelUP",
+		"1A:2B:1C:2D:1E:2F:1P": "Planet Gravity",
+		"2A:1B:2C:1D:2E:1F:1P": "Tahiti",
 		"1A:1B:1C:1D:1E:1F:1O:1P": "Midway",
-		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain Tiles",
 	},
 
 	"PEGASUS":{
-		"1A:1B:1C:1D:1E:1F:1P": "Atlantis Room",
-		"2A:2B:2C:2D:2E:2F:1P": "Village Game",
+		"1A:1B:1C:1D:1E:1F:1P": "Atlantis Game",
 		"1A:2B:1C:2D:1E:2F:1P": "Planet Gravity",
 		"1A:1B:1C:1D:1E:1F:1O:1P": "Midway",
-		"2A:2B:2C:2D:2E:2F:1O:1P": "Mountain Tiles"
 	}
 }
+
+
+RINGTARG = None
+
+class RingBeam(world.DynamicWorldTile):
+
+	NAME = "Goa'uld Ring Platform"
+	HIGH_PRIORITY = True
+	CONTAINER = "LOCK"
+
+	LOD_ACTIVE = 1000
+	LOD_FREEZE = 2000
+	LOD_PROXY = 3000
+	OBJ_HIGH = []
+	OBJ_LOW  = []
+	OBJ_PROXY = []
+
+	CAM_TYPE = "FIRST"
+	CAM_ORBIT = -1
+	CAM_RANGE = (0,1)
+	CAM_HEIGHT = 0
+	CAM_STEPS = 1
+	CAM_ZOOM = 0
+	CAM_MIN = 0
+	CAM_SLOW = 0
+	CAM_FOV = 90
+	CAM_HEAD_G = 0
+	CAM_OFFSET = (0,0,0)
+	CAM_AUTOZOOM = False
+
+	def getLodLevel(self):
+		return "ACTIVE"
+
+	def setLodState(self, lod):
+		if lod == self.lod_state:
+			return
+
+		self.lod_state = lod
+		self.data["LOD_STATE"] = lod
+
+		self.loadChildren()
+
+	def defaultData(self):
+		self.targ = None
+		self.timer = 0
+		self.wait = 0
+		self.home = None
+		self.rings = []
+		self.col = None
+		self.gfx = None
+
+		self.env_dim = None
+		self.env_col = self.owner.color
+
+		dict = super().defaultData()
+		dict["RING"] = self.owner.get("RING", self.NAME)
+		dict["FLOOR"] = self.owner.get("FLOOR", True)
+
+		return dict
+
+	def checkCoords(self, cls):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls == self or self.home != None:
+			return None
+
+		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
+		vec = lp.copy()
+		vec[2] = 0
+
+		if vec.length < 1.5 and (0 < lp[2] < 3):
+			return True
+
+		return False
+
+	def applyContainerProps(self, cls):
+		cls.gravity = self.owner.getAxisVect([0,0,1]).normalized()*-9.8
+		cls.air_drag = 1
+		cls.env_dim = list(self.env_col)
+
+	def ST_Startup(self):
+		self.active_state = self.ST_Disabled
+		self.active_post.append(self.PS_Ambient)
+
+	def stateSwitch(self, state=None):
+		if state == None:
+			self.active_state = getattr(self, self.data["ACTIVE_STATE"], self.active_state)
+
+		if state == "DISABLED":
+			for obj in self.rings:
+				obj.endObject()
+			self.rings = []
+			#self.col.endObject()
+			self.gfx.endObject()
+			self.col = None
+			self.gfx = None
+			self.targ = None
+			self.home = None
+			self.wait = 0
+			self.timer = 0
+			self.active_state = self.ST_Disabled
+
+		if state == "ACTIVE":
+			self.active_state = self.ST_Active
+
+	def ST_Disabled(self):
+		stop = False
+		evt = base.GetFirstEvent("GOAULD", "RINGS", "SEND")
+		if evt != None:
+			if evt.sender in self.getChildrenRecursive():
+				stop = True
+				self.sendEvent("GOAULD", evt.sender, "RINGS", "HOME", NAME=self.data["RING"])
+
+		sec = base.GetFirstEvent("GOAULD", "RINGS", "WORLD")
+		if sec != None and stop == False:
+			self.sendEvent("GOAULD", sec.sender, "RINGS", NAME=self.data["RING"])
+
+		act = self.getFirstEvent("GOAULD", "RINGS", "ACTIVATE")
+		if act != None:
+			self.targ = act.sender
+			self.home = act.getProp("HOME", False)
+			self.wait = 0
+			self.timer = 0
+			if self.data["FLOOR"] != self.targ.data["FLOOR"]:
+				if self.data["FLOOR"] == True:
+					self.timer = -80
+			self.sendEvent("GOAULD", self.targ, "RINGS", "ACTIVATE", HOME=False)
+			self.stateSwitch("ACTIVE")
+
+	def ST_Active(self):
+		owner = self.owner
+		scene = owner.scene
+		camera = scene.active_camera
+
+		if self.targ == None:
+			self.stateSwitch("DISABLED")
+
+		o = self.targ.owner
+		n = owner.name
+		d = owner.worldOrientation.inverted()*(o.worldPosition-owner.worldPosition)
+
+		if self.data["FLOOR"] == True:
+			a = "RingFloor"
+			g = 160
+		else:
+			a = "RingCeiling"
+			g = 240
+
+		#if self.timer == 0:
+		#	self.col = scene.addObject(n+".COL", owner, 0)
+		#	self.col.setParent(owner, False, False)
+		#	self.col.localPosition = (0,0,0)
+
+		if self.timer == g:
+			self.gfx = scene.addObject(n+".GFX", owner, 0)
+			self.gfx.setParent(owner, True, False)
+			self.gfx.localPosition = (0,0,0)
+			f = (0,150)
+			if d[2] > 0:
+				f = (150,0)
+			self.doAnim(self.gfx, "RingBeam", f)
+
+		if self.timer == g+70:
+			send = self.getChildren()
+			if self.home == True:
+				world.sendObjects(str(base.CURRENT["Level"]), "RINGTRANSPORTHOME", send, zone=owner)
+				viewport.setCamera(self)
+				viewport.setParent(owner)
+				viewport.setState("FIRST")
+				viewport.setCameraPosition([0,0,1.5])
+				viewport.loadCamera()
+				print("RING-SEND-HOME")
+			else:
+				world.sendObjects(str(base.CURRENT["Level"]), "RINGTRANSPORT", send, zone=owner)
+				print("RING-SEND")
+			#self.home = -1
+
+		if self.timer == g+80:
+			if self.home == False:
+				spn = world.loadObjects("RINGTRANSPORTHOME", owner)
+				print("RING-LOAD")
+			else:
+				spn = world.loadObjects("RINGTRANSPORT", owner)
+				print("RING-LOAD-HOME")
+			for cls in spn:
+				cls.setContainerParent(self)
+			#self.home = -2
+
+		if g+150 <= self.timer < g+245:
+			if self.wait <= 10:
+				if self.data["FLOOR"] == True:
+					i = 90-(self.timer-(g+150))
+				else:
+					i = 90-(self.timer-(g+150))
+				obj = self.rings[int(i/10)]
+				self.doAnim(obj, a, (200, 300))
+				self.wait = 20
+			self.wait -= 1
+
+		if self.timer >= g+350:
+			self.stateSwitch("DISABLED")
+			return
+
+		if self.wait == 0 and self.timer >= 0:
+			off = scene.addObject(n+".Offset", owner, 0)
+			off.setParent(owner, True, False)
+			off.localPosition = (0,0,0)
+			self.doAnim(off, a, (0,180))
+			self.rings.append(off)
+			obj = scene.addObject(n+".Mesh", owner, 0)
+			obj.setParent(off, True, False)
+			if self.data["FLOOR"] == True:
+				obj.localPosition = (0,0,((90-self.timer)/40))
+			else:
+				obj.localPosition = (0,0,(self.timer/40))
+			self.wait = 9
+		elif 0 < self.timer < 95:
+			self.wait -= 1
+
+		if self.gfx != None:
+			vec = camera.getAxisVect((0,0,-1))
+			up = owner.getAxisVect((0,0,1))
+			self.gfx.alignAxisToVect(vec, 1, 1.0)
+			self.gfx.alignAxisToVect(up, 2, 1.0)
+			self.gfx.localPosition = owner.worldOrientation.inverted()*self.gfx.getAxisVect((0,1.5,0))
+
+		self.timer += 1
+
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.env_col = list(self.env_dim)
+
+		for obj in self.rings:
+			obj.children[0].color = list(self.env_dim)
+
+		self.env_dim = None
+
+
+class HandDevice(weapon.CoreWeapon):
+
+	NAME = "Modified Hand Device"
+	TYPE = "TOOLS"
+	SLOTS = ["Hip_L", "Hip_R"]
+	SCALE = 0.2
+	OFFSET = (0,0,0)
+	COLOR = (1,0,1,1)
+	BOX_NORMALIZE = False
+
+	def defaultData(self):
+		self.id = 0
+		self.wt = 0
+
+		dict = super().defaultData()
+
+		return dict
+
+	def ST_Startup(self):
+		pass
+
+	def ST_Enable(self):
+		self.data["HUD"]["Text"] = ""
+		self.data["HUD"]["Stat"] = 100
+
+		super().ST_Enable()
+
+	def ST_Stop(self):
+		self.data["HUD"]["Text"] = ""
+		self.data["HUD"]["Stat"] = 100
+
+		super().ST_Stop()
+
+	def getRingDist(self, evt):
+		obj = evt.sender.owner
+		return (obj.worldPosition-self.owner.worldPosition).length
+
+	def ST_Idle(self):
+		owner = self.getOwner()
+
+		plr = self.owning_player
+		plrobj = plr.getOwner()
+
+		base.SendEvent(self, "GOAULD", "RINGS", "SEND")
+
+		evt = self.getFirstEvent("GOAULD", "RINGS", "HOME")
+		if evt != None:
+			self.data["HUD"]["Text"] = evt.getProp("NAME", evt.sender.NAME)
+		else:
+			self.data["HUD"]["Text"] = "Searching..."
+
+		if self.wt > 0:
+			self.wt -= 1
+
+		self.data["HUD"]["Stat"] = (200-self.wt)/2
+
+	def ST_Active(self):
+		owner = self.getOwner()
+
+		plr = self.owning_player
+		plrobj = plr.getOwner()
+
+		base.SendEvent(self, "GOAULD", "RINGS", "SEND")
+		base.SendEvent(self, "GOAULD", "RINGS", "WORLD")
+
+		home = self.getFirstEvent("GOAULD", "RINGS", "HOME")
+
+		rings = sorted(self.getAllEvents("GOAULD", "RINGS", "!HOME"), key=self.getRingDist)
+
+		ln = len(rings)-1
+		if self.id > ln:
+			self.id = ln
+		if ln < 0 or home == None:
+			self.data["HUD"]["Text"] = "Searching..."
+			self.data["HUD"]["Stat"] = 100-self.wt
+			#self.stateSwitch(False)
+			return
+
+		if keymap.BINDS["WP_UP"].tap() == True:
+			self.id += 1
+		if keymap.BINDS["WP_DOWN"].tap() == True:
+			self.id -= 1
+
+		if self.id < 0:
+			self.id = ln
+		if self.id > ln:
+			self.id = 0
+
+		evt = rings[self.id]
+
+		self.data["HUD"]["Text"] = evt.getProp("NAME", evt.sender.NAME)+" - "+str(round(self.getRingDist(evt), 1))
+		self.data["HUD"]["Stat"] = (200-self.wt)/2
+
+		if self.wt > 0:
+			self.wt -= 1
+		elif keymap.BINDS["ATTACK_ONE"].tap() == True:
+			evt.sender.sendEvent("GOAULD", home.sender, "RINGS", "ACTIVATE", HOME=True)
+			self.wt = 200
 
 
 class LayoutGateship(HUD.HUDLayout):
@@ -199,8 +537,8 @@ class Gateship(vehicle.CoreAircraft):
 
 		ori = owner.worldOrientation.copy()
 
+		cls.removeContainerParent(physics=False)
 		cls.exitVehicle(spawn, ori)
-		cls.removeContainerParent()
 		cls.data["LINVEL"] = list(owner.localLinearVelocity)
 
 		self.player_seats[key] = None
@@ -611,9 +949,16 @@ class CoreGate(base.CoreObject):
 	GALAXY = "MILKYWAY"
 	GHOST = True
 	OFFTIME = 100
-	CONTAINER = "WORLD"
+	CONTAINER = "LOCK"
+	HIGH_PRIORITY = True
 
 	def defaultData(self):
+		self.puddle = None
+		self.effect = None
+		self.back = []
+
+		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["CHEVRON"] = [0]*9
 		dict["ADDRESS"] = []
@@ -635,13 +980,9 @@ class CoreGate(base.CoreObject):
 
 		self.STARGATE["Gate"] = self.dict
 
-		#del self.objects["Root"]["RAYCAST"]
-
 		self.active_pre.append(self.PR_Iris)
-
-		self.puddle = None
-		self.effect = None
-		self.back = []
+		self.active_post.append(self.PS_Ambient)
+		self.active_post.append(self.PS_Chevron)
 
 		self.doTrack("START")
 
@@ -650,7 +991,17 @@ class CoreGate(base.CoreObject):
 
 		for id in range(len(self.data["CHEVRON"])):
 			key = str(int(id+1))
-			obj = self.objects["Chevron"][key]
+			name = self.owner.name
+			child = self.owner.childrenRecursive
+			l = [name,"Chevron",key]
+			self.objects["Chevron"][key] = {}
+			self.objects["Chevron"][key][""] = child[".".join(l)]
+			for sn in {"Lock", "Light", "Glow"}:
+				j = ".".join(l+[sn])
+				if child.get(j, None) != None:
+					self.objects["Chevron"][key][sn] = child[j]
+
+			obj = self.objects["Chevron"][key]["Light"]
 			if len(self.data["ADDRESS"]) >= id+1:
 				self.data["CHEVRON"][id] = self.OFFTIME
 				obj.color[0] = 1
@@ -852,7 +1203,7 @@ class CoreGate(base.CoreObject):
 
 		for id in range(len(self.data["CHEVRON"])):
 			key = id+1
-			obj = self.objects["Chevron"][str(int(key))]
+			obj = self.objects["Chevron"][str(int(key))]["Light"]
 
 			if check >= key:
 				if self.data["CHEVRON"][id] < 20:
@@ -929,7 +1280,7 @@ class CoreGate(base.CoreObject):
 
 		for id in range(len(self.data["CHEVRON"])):
 			key = id+1
-			obj = self.objects["Chevron"][str(int(key))]
+			obj = self.objects["Chevron"][str(int(key))]["Light"]
 
 			if self.data["CHEVRON"][id] > 0:
 				self.data["CHEVRON"][id] -= 1
@@ -950,6 +1301,18 @@ class CoreGate(base.CoreObject):
 		self.active_state = self.ST_Disabled
 		self.doEventHorizon("END")
 
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+
+		self.env_dim = None
+
 	def PS_Chevron(self):
 		pass
 
@@ -959,9 +1322,12 @@ class CoreDHD(base.CoreObject):
 	NAME = "Stargate DHD"
 	GALAXY = "MILKYWAY"
 	OFFTIME = 100
-	CONTAINER = "WORLD"
+	CONTAINER = "LOCK"
 
 	def defaultData(self):
+		self.stargate = None
+		self.env_dim = None
+
 		dict = super().defaultData()
 		dict["TIMER"] = 0
 		dict["ACTIVE"] = True
@@ -979,7 +1345,7 @@ class CoreDHD(base.CoreObject):
 
 		self.STARGATE["DHD"] = self.dict
 
-		self.stargate = None
+		self.active_post.append(self.PS_Ambient)
 
 		#del self.objects["Root"]["RAYCAST"]
 		del self.objects["Button"]["GROUND"]
@@ -1089,18 +1455,26 @@ class CoreDHD(base.CoreObject):
 			self.data["ACTIVE"] = True
 			self.active_state = self.ST_Disabled
 
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+
+		self.env_dim = None
+
 	def RUN(self):
 		if self.stargate == None:
 			if self.STARGATE["Gate"] != None:
 				self.stargate = self.STARGATE["Gate"]["Data"]
 				for key in self.objects["Keys"]:
 					self.doButton(key, 0)
-			return
-
-		self.runPre()
-		self.runStates()
-		self.runPost()
-		self.clearRayProps()
+		else:
+			super().RUN()
 
 
 class RedGate(CoreGate):
@@ -1119,9 +1493,9 @@ class RedGate(CoreGate):
 			self.objects["Track"].applyRotation((0, 0.01, 0), True)
 
 	def PR_Iris(self):
-		iris = self.objects["IrisRig"]
-		mesh = self.objects["IrisMesh"]
-		COL = self.objects["IrisCOL"]
+		iris = self.objects["Iris"]["Rig"]
+		mesh = self.objects["Iris"]["Mesh"]
+		COL = self.objects["Iris"]["COL"]
 
 		data = self.data["IRIS"]
 
@@ -1147,6 +1521,14 @@ class RedGate(CoreGate):
 		COL.reinstancePhysicsMesh()
 		mesh.visible = True #(data["Timer"]>0)
 
+	def PS_Chevron(self):
+		for id in range(9):
+			ls = self.objects["Chevron"][str(int(id+1))]
+			ls["Glow"].color = list(ls["Light"].color)
+			ls[""].color = list(self.objects["Mesh"].color)
+			ls["Lock"].color = list(ls[""].color)
+		self.objects["Track"].color = list(self.objects["Mesh"].color)
+
 
 class RedDHD(CoreDHD):
 
@@ -1163,6 +1545,11 @@ class BlueGate(CoreGate):
 			self.objects["Track"].color[0] = 0
 		if state == "ON" or state == "DIALING":
 			self.objects["Track"].color[0] = 1
+
+	def PS_Chevron(self):
+		for id in range(9):
+			ls = self.objects["Chevron"][str(int(id+1))]
+			ls[""].color = list(self.objects["Mesh"].color)
 
 
 class BlueDHD(CoreDHD):

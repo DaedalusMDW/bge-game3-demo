@@ -4,6 +4,21 @@ from bge import logic
 
 from game3 import base, world, keymap, HUD, viewport
 
+import random
+from mathutils import Color, Vector
+
+
+class Station(world.DynamicWorldTile):
+
+	CONTAINER = "LOCK"
+	NAME = "Space Station"
+	LOD_ACTIVE = 500
+	LOD_FREEZE = 2000
+	LOD_PROXY = 50000
+	OBJ_HIGH = ["Mesh", "Smooth", "Details", "COL", "Lights"]
+	OBJ_LOW  = ["Mesh"]
+	OBJ_PROXY = ["LOW"]
+
 
 class Donut(world.DynamicWorldTile):
 
@@ -56,17 +71,6 @@ class Donut(world.DynamicWorldTile):
 
 		return True
 
-class Station(world.DynamicWorldTile):
-
-	CONTAINER = "LOCK"
-	NAME = "Space Station"
-	LOD_ACTIVE = 500
-	LOD_FREEZE = 2000
-	LOD_PROXY = 50000
-	OBJ_HIGH = ["Mesh", "Smooth", "Details", "COL", "Lights"]
-	OBJ_LOW  = ["Mesh"]
-	OBJ_PROXY = ["LOW"]
-
 
 class AmbientTile(world.DynamicWorldTile):
 
@@ -99,32 +103,110 @@ class AmbientTile(world.DynamicWorldTile):
 
 		self.env_dim = None
 
+
 class CityBase(AmbientTile):
 
 	CONTAINER = "LOCK"
 	LOD_ACTIVE = 2000
-	LOD_FREEZE = 3000
+	LOD_FREEZE = 10000
 	LOD_PROXY = 100000
+
+	def defaultData(self):
+		self.env_dim = None
+		self.env_col = self.owner.color
+
+		dict = super().defaultData()
+		dict["ISGEN"] = False
+		dict["RADIUS"] = 0
+		dict["RISE"] = 0
+		return dict
+
+	def ST_Startup(self):
+		owner = self.getOwner()
+		scene = owner.scene
+
+		## Build It ##
+		if self.data["ISGEN"] == False:
+			## Small ##
+			if owner["RADIUS_IN"] >= 100 and owner["COUNT_IN"] >= 3:
+				self.data["RADIUS"] = owner["RADIUS_IN"]+200
+				x = 360/owner["COUNT_IN"]
+				for i in range(owner["COUNT_IN"]):
+					rot = self.createMatrix(rot=(0,0,(i*x)+(x/2)), deg=True)
+					vec = self.createVector(vec=(0,owner["RADIUS_IN"],0))
+
+					dict = {"Object":"DistrictSmall", "Data":None, "Parent":"Root"}
+					newobj = self.spawnChild(dict, owner, pos=rot*vec, ori=rot)
+
+					print("BUILDERBOB:", "DistrictSmall", (i*x)+(x/2), owner["RADIUS_IN"])
+
+			## Outer ##
+			if owner["RADIUS_OUT"] >= 200 and owner["COUNT_OUT"] >= 3:
+				self.data["RADIUS"] = owner["RADIUS_OUT"]+200
+				x = 360/owner["COUNT_OUT"]
+				for i in range(owner["COUNT_OUT"]):
+					rot = self.createMatrix(rot=(0,0,(i*x)+(x/2)), deg=True)
+					vec = self.createVector(vec=(0,owner["RADIUS_OUT"],0))
+
+					dict = {"Object":"DistrictOuter", "Data":None, "Parent":"Root"}
+					newobj = self.spawnChild(dict, owner, pos=rot*vec, ori=rot)
+
+					print("BUILDERBOB:", "DistrictOuter", (i*x)+(x/2), owner["RADIUS_OUT"])
+
+			## Bridge Aligned ##
+			if owner["COUNT_OUT"] == owner["COUNT_IN"] and owner["COUNT_OUT"] >= 3:
+				x = 360/owner["COUNT_OUT"]
+				for i in range(owner["COUNT_OUT"]):
+					rot = self.createMatrix(rot=(0,0,(i*x)+(x/2)), deg=True)
+					vec = self.createVector(vec=(0,owner["RADIUS_OUT"]-45,0))
+
+					dict = {"Object":"DistrictBridge", "Data":None, "Parent":"Root"}
+					newobj = self.spawnChild(dict, owner, pos=rot*vec, ori=rot)
+
+					print("BUILDERBOB:", "DistrictBridge", (i*x)+(x/2))
+
+			## Custom Center ##
+			ct = owner.get("CENTER", "")
+			if ct != "":
+				dict = {"Object":ct, "Data":None, "Parent":"Root"}
+				newobj = self.spawnChild(dict, owner)
+				print("BUILDERBOB:", ct)
+
+			self.data["ISGEN"] = True
+
+		self.active_post.append(self.PS_Ambient)
+
+	def checkCoords(self, cls):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls == self:
+			return None
+
+		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
+		vec = lp.copy()
+		vec[2] = 0
+
+		rd = self.data["RADIUS"]
+		hz = self.data["RISE"]
+
+		if vec.length < rd and (-100 < lp[2] < 100+hz):
+			return True
+
+		return False
 
 class CityDistrict(AmbientTile):
 
 	CONTAINER = "LOCK"
 	PROPAGATE = False
-	LOD_ACTIVE = 800
-	LOD_FREEZE = 1500
+	LOD_ACTIVE = 200
+	LOD_FREEZE = 500
 	LOD_PROXY = 100000
 
 class CityBuilding(CityDistrict):
 
 	CONTAINER = "LOCK"
 	PROPAGATE = False
-	LOD_ACTIVE = 150
-	LOD_FREEZE = 200
-	LOD_PROXY = 100000
-
-
-import random
-from mathutils import Color, Vector
+	LOD_ACTIVE = 100
+	LOD_FREEZE = 100
+	LOD_PROXY = 10000
 
 class AddBuilding(base.CoreObject):
 
@@ -135,14 +217,6 @@ class AddBuilding(base.CoreObject):
 		]
 
 	def ST_Startup(self):
-		fr = self.owner.worldPosition+self.owner.getAxisVect((0,0,500))
-		to = fr+self.owner.getAxisVect((0,0,-1))
-
-		#obj, pnt, nrm = self.owner.rayCast(to,fr,1000,"",1,0,0)
-
-		#if obj != None:
-		#	self.owner.worldPosition = pnt
-
 		## Spawn Building ##
 		name = random.choice(self.OPTIONS)
 		dict = {"Object":name, "Data":None}
@@ -151,10 +225,9 @@ class AddBuilding(base.CoreObject):
 		## Parent to Spawner Parent ##
 		pt = self.getParent()
 		if pt != None:
-			newobj["Class"].setContainerParent(pt)
+			newobj["Class"].setContainerParent(pt, "Root", pos=None, ori=None) #`None` for no change
 
-		# self destruct
-		self.endObject()
+		self.endObject() #self destruct
 
 
 class VoidHut(AmbientTile):

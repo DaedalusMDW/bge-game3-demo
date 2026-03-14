@@ -178,7 +178,7 @@ class ZephyrShip(base.CoreObject):
 
 		self.ship_safe = 0
 		if self.ship_class != None:
-			self.ship_class.packObject(True, True)
+			self.ship_class.packObject(True, True, force=True)
 			self.ship_class = None
 			self.ship_obj = None
 
@@ -357,7 +357,7 @@ class ZephyrShip(base.CoreObject):
 
 		elif lz != None:
 			if self.ship_class != None:
-				self.ship_class.packObject(True, True)
+				self.ship_class.packObject(True, True, force=True)
 				self.ship_class = None
 				self.ship_obj = None
 			self.doShipCinematic("Zone")
@@ -609,7 +609,7 @@ class QuinJet(vehicle.CoreAircraft):
 	LANDACTION = "QJLand"
 	LANDFRAMES = [100, 0]
 
-	INVENTORY = {"Gun":"WP_GatlingGun", "Missile_L":"WP_Missile", "Missile_R":"WP_Missile"}
+	INVENTORY = {"Gun":"WP_GatlingGun", "Missile_L":"WP_ZMissile", "Missile_R":"WP_ZMissile"}
 	SLOTS = {"ONE":"Gun", "TWO":"Missile"}
 
 	CAM_RANGE = (24, 40)

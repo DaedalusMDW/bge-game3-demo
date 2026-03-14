@@ -2,9 +2,7 @@
 
 from bge import logic
 
-from game3 import keymap, base, player, HUD, viewport
-
-from mathutils import Vector
+from game3 import base, keymap, player, HUD, viewport
 
 
 class ActorPlayer(player.CorePlayer):
@@ -13,6 +11,9 @@ class ActorPlayer(player.CorePlayer):
 	INVENTORY = {}
 
 	SLOPE = 50
+
+	CAM_SHDIST = 1.5
+	CAM_SHSIDE = 0.4
 
 	def defaultData(self):
 		self.env_dim = None
@@ -1093,17 +1094,18 @@ class LayoutRed(player.ActorLayout):
 
 	MODULES = [HUD.Stats, HUD.Aircraft, InventoryRed] #, HUD.Weapons]
 
+
 class GreenPlayer(ActorPlayer):
 
 	NAME = "Green Actor"
 	CLASS = "Standard"
 	WP_TYPE = "RANGED"
 	HAND = {"MAIN":"Hand_R", "OFF":"Hand_L"}
-	INVENTORY = {"Hip_R":"WP_GravGun"}
+	INVENTORY = {"Hip_L":"HandDevice", "Hip_R":"WP_GravGun"}
 	#OFFSET = (0, 0.05, 0.1)
-	#SPEED = 0.1
-	#ACCEL = 20
-	#JUMP = 5
+	SPEED = 0.1
+	ACCEL = 20
+	JUMP = 4
 	#EYE_H = 1.658
 	#EDGE_H = 2.0
 	CAM_TYPE = "THIRD"
@@ -1118,7 +1120,7 @@ class RedPlayer(ActorPlayer):
 	#OFFSET = (0, 0.05, 0.1)
 	SPEED = 0.1
 	ACCEL = 20
-	JUMP = 5
+	JUMP = 4
 	#EYE_H = 1.658
 	#EDGE_H = 2.0
 	CAM_TYPE = "THIRD"
@@ -1135,7 +1137,7 @@ class RedPlayer(ActorPlayer):
 		keymap.MOUSELOOK.center()
 
 		if self.jump_state != "FLYING":
-			if self.gravity.length <= 0.1:
+			if (self.gravity.length*self.air_drag) <= 0.1:
 				return
 			self.alignToGravity(owner, axis=1, neg=True)
 			vref = viewport.getDirection((0,1,0))
@@ -1214,7 +1216,7 @@ class RedPlayer(ActorPlayer):
 
 		wall = self.checkWall(axis=owner.getAxisVect((0,0,1)), simple=1)
 
-		if keymap.BINDS["TOGGLEMODE"].tap() == True or self.gravity.length <= 0.1:
+		if keymap.BINDS["TOGGLEMODE"].tap() == True or (self.gravity.length*self.air_drag) <= 0.1:
 			self.ST_Walking_Set()
 			return
 		if wall != None:
@@ -1222,7 +1224,7 @@ class RedPlayer(ActorPlayer):
 				self.ST_Walking_Set()
 				return
 
-		owner.applyForce(-self.gravity, False)
+		owner.applyForce(-self.gravity*self.air_drag, False)
 
 		ORIX = 0
 		ORIY = 0
@@ -1324,7 +1326,7 @@ class BluePlayer(TRPlayer):
 	INVENTORY = {"Shoulder_L": "WP_SimpleStaff", "Shoulder_R":"WP_LaserGun"}
 	#OFFSET = (0, 0.1, 0.18)
 	SPEED = 0.12
-	JUMP = 6
+	JUMP = 5
 	#EYE_H = 1.527
 	#EDGE_H = 1.85
 	ACCEL = 15

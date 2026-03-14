@@ -181,11 +181,11 @@ def TELEPORT(cont):
 		owner["GFX"].visible = True
 		owner["HALO"].visible = True
 
-	if owner["ANIM"] >= 0 and owner["GFX"].visible == True:
-		owner["GFX"].playAction("GFX_Teleport", -5, 25, 0, 0, 5, logic.KX_ACTION_MODE_LOOP)
-		owner["GFX"].setActionFrame(owner["ANIM"], 0)
-	else:
-		owner["GFX"].stopAction(0)
+	#if owner["ANIM"] >= 0 and owner["GFX"].visible == True:
+	owner["GFX"].playAction("GFX_Teleport", -5, 25, 0, 0, 10, logic.KX_ACTION_MODE_LOOP)
+	owner["GFX"].setActionFrame(owner["ANIM"], 0)
+	#else:
+	#	owner["GFX"].stopAction(0)
 
 	owner["COLLIDE"] = []
 

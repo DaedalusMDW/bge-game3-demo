@@ -213,6 +213,120 @@ class JetTime(powerup.CorePowerup):
 		return False
 
 
+class ZCannon(weapon.CoreWeapon):
+
+	NAME = "Hardpoint Gun"
+	TYPE = "RANGED"
+	MAG = 20
+
+	def defaultData(self):
+		dict = super().defaultData()
+		dict["MAG"] = self.MAG
+		dict["RELOAD"] = 0
+
+		return dict
+
+	def ST_Active(self):
+		owner = self.objects["Root"]
+
+		fire = self.getFirstEvent("WP_FIRE")
+
+		if self.data["COOLDOWN"] > 0:
+			self.data["COOLDOWN"] -= 1
+
+		elif fire != None and self.data["MAG"] >= 1:
+			plrobj = self.owning_player.objects["Root"]
+			sx, sy, sz = fire.getProp("SCALE", [1, 1, 1])
+			rnd = logic.getRandomFloat()
+			rndx = (logic.getRandomFloat()-0.5)*0.01
+			rndy = (logic.getRandomFloat()-0.5)*0.01
+			rvec = self.owner.getAxisVect((rndx,5,rndy)).normalized()
+
+			ammo = owner.scene.addObject("AMMO_Bullet", self.owner, 50)
+			ammo.alignAxisToVect(ammo.getVectTo(base.SC_SCN.active_camera)[1], 2, 1.0)
+			ammo.alignAxisToVect(rvec, 1, 1.0)
+			ammo["ROOTOBJ"] = plrobj
+			ammo["DAMAGE"] = 4
+			ammo["LINV"] = plrobj.worldLinearVelocity*(1/60)
+			ammo.localScale = (sx, 24+ammo["LINV"].length, sz)
+			ammo.color = (1.0, 0.8, 0.5, 1)
+			ammo.children[0].localScale = (1, 0.2+(rnd*0.8), 1)
+			ammo.children[0].color = fire.getProp("COLOR", [1, 1, 0, 1])
+
+			gfx = base.SC_SCN.addObject("GFX_MuzzleFlash", self.owner, 0)
+			gfx.setParent(self.owner, False, False)
+			gfx.localScale = (sx, sx*2, sx)
+			gfx.children[0].color = (1,1,0,1)
+
+			self.data["MAG"] -= 1
+			self.data["RELOAD"] = -60
+			self.data["COOLDOWN"] = 10
+
+		elif self.data["MAG"] < self.MAG:
+			if self.data["RELOAD"] >= 20:
+				self.data["MAG"] += 1
+				self.data["RELOAD"] = 0
+			self.data["RELOAD"] += 1
+
+		self.data["HUD"]["Text"] = "Ammo: "+str(self.data["MAG"])
+		self.data["HUD"]["Stat"] = (self.data["MAG"]/self.MAG)*100
+
+
+class ZMissile(weapon.CoreWeapon):
+
+	NAME = "Hardpoint Missile"
+	TYPE = "RANGED"
+
+	def ST_Active(self):
+		owner = self.owner
+		plrobj = self.owning_player.owner
+
+		fire = self.getFirstEvent("WP_FIRE", "TAP")
+		lock = self.getFirstEvent("WP_LOCK")
+
+		if self.data["COOLDOWN"] == 0:
+			if lock != None:
+				if self.target == None:
+					l = []
+					for obj in owner.scene.objects:
+						if obj.parent == None and obj != plrobj and "Class" in obj:
+							if obj["Class"].data.get("PHYSICS", "") in ["DYNAMIC", "RIGID"]:
+								l.append(obj)
+								#print("TARGET:", obj)
+
+					l.sort(key=lambda x: (x.worldPosition-plrobj.worldPosition).length)
+					if len(l) >= 1:
+						print("LOCK:", l[0])
+						self.target = l[0]
+
+					#rayfrom = owner.worldPosition+owner.getAxisVect([0,2,0])
+					#rayto = owner.worldPosition+owner.getAxisVect([0,4,0])
+					#obj, pnt, nrm = owner.rayCast(rayto, rayfrom, 2000, "Class", 1, 0, 0)
+					#if obj != None:
+					#	if obj["Class"].data.get("PHYSICS", "") not in ["DYNAMIC", "RIGID"]:
+					#		obj = None
+					#self.target = obj
+			else:
+				self.target = None
+
+			if fire != None:
+				ammo = owner.scene.addObject("AMMO_ZMissile", owner, 0)
+				point = self.getLocalSpace(plrobj, owner.worldPosition)
+				ammo.worldLinearVelocity = plrobj.getVelocity(point)
+				ammo.worldPosition = owner.worldPosition+owner.getAxisVect((0,2,0))
+				ammo["ROOTOBJ"] = plrobj
+				ammo["DAMAGE"] = 200
+				ammo["IMPULSE"] = 10
+				ammo["RADIUS"] = 20
+				ammo["TIME"] = 1000
+				ammo["TARGET"] = self.target
+
+				self.data["COOLDOWN"] = 50
+
+		else:
+			self.data["COOLDOWN"] -= 1
+
+
 class MachineGun(weapon.CorePlayerWeapon):
 
 	NAME = "Basic SMG"
@@ -259,9 +373,7 @@ class MachineGun(weapon.CorePlayerWeapon):
 		barrel = self.objects["Barrel"]
 
 		plr = self.owning_player
-		plrobj = plr.objects["Root"]
-		if plrobj == None:
-			return
+		plrobj = plr.getOwner()
 
 		vec = viewport.getRayVec()
 
@@ -390,9 +502,7 @@ class HandGun(weapon.CorePlayerWeapon):
 		barrel = self.objects["Barrel"]
 
 		plr = self.owning_player
-		plrobj = plr.objects["Root"]
-		if plrobj == None:
-			return
+		plrobj = plr.getOwner()
 
 		vec = viewport.getRayVec()
 
@@ -560,7 +670,7 @@ class GravGun(weapon.CorePlayerWeapon):
 
 		plr = self.owning_player
 		slot = self.owning_slot
-		plrobj = plr.objects["Root"]
+		plrobj = plr.getOwner()
 
 		vec = viewport.getRayVec()
 
@@ -586,7 +696,7 @@ class GravGun(weapon.CorePlayerWeapon):
 
 					if keymap.BINDS["WP_UP"].tap() == True and self.beam < 30:
 						self.beam += 1
-					if keymap.BINDS["WP_DOWN"].tap() == True and self.beam > 5:
+					if keymap.BINDS["WP_DOWN"].tap() == True and self.beam > 2:
 						self.beam -= 1
 
 					## Forces ##
