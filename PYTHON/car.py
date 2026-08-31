@@ -38,7 +38,7 @@ class AmbientCar(vehicle.CoreCar):
 
 class Mercedes(AmbientCar):
 
-	NAME = "Raptor's Mercedes"
+	NAME = "Mercedes"
 	PLAYERACTION = "SeatLow"
 
 	WH_MESH = "Wheel.Mercedes"
@@ -74,7 +74,7 @@ class Mercedes(AmbientCar):
 
 class Corvette(AmbientCar):
 
-	NAME = "Hugo's Corvette"
+	NAME = "Corvette"
 
 	WH_MESH = "Wheel.Corvette"
 	WH_RADIUS = 0.33
@@ -142,7 +142,7 @@ class Lamborghini(AmbientCar):
 
 class Van(AmbientCar):
 
-	NAME = "RayBase Transport Van"
+	NAME = "Transport Van"
 
 	WH_MESH = "Wheel.Van"
 	WH_RADIUS = 0.4
@@ -177,7 +177,7 @@ class Van(AmbientCar):
 
 class Silverado(AmbientCar):
 
-	NAME = "The Scientist's Truck"
+	NAME = "Pickup Truck"
 
 	WH_MESH = "Wheel.Silverado"
 	WH_RADIUS = 0.8  #0.4
@@ -189,7 +189,7 @@ class Silverado(AmbientCar):
 	WH_HEIGHT = 0.0
 
 	VEH_LENGTH = 1.0
-	VEH_COMPRESS = 2
+	VEH_COMPRESS = 1
 
 	VEH_ROLL = 0
 	VEH_SPRING = 20
