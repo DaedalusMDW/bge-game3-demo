@@ -180,16 +180,16 @@ class Silverado(AmbientCar):
 	NAME = "Pickup Truck"
 
 	WH_MESH = "Wheel.Silverado"
-	WH_RADIUS = 0.8  #0.4
+	WH_RADIUS = 0.8
 	WH_SCALE = 2.0
 
 	WH_FRONT = 2.13
 	WH_REAR = -1.78
-	WH_WIDTH = 1.1  #0.75
-	WH_HEIGHT = 0.0
+	WH_WIDTH = 1.1
+	WH_HEIGHT = 0.5
 
-	VEH_LENGTH = 1.0
-	VEH_COMPRESS = 1
+	VEH_LENGTH = 0.5
+	VEH_COMPRESS = 2
 
 	VEH_ROLL = 0
 	VEH_SPRING = 20
