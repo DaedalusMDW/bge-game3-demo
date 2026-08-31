@@ -113,6 +113,15 @@ class ActorPlayer(player.CorePlayer):
 
 		super().applyModifier(dict)
 
+	def packObject(self, update=True, portal=None, force=False, save=True):
+		if self.npc_leader != None and save == False:
+			print("- LEADER -", self.NAME, self.data["NPC_LEAD"], self.getParent())
+			return None
+
+		chk = super().packObject(update, portal, force, save)
+
+		return chk
+
 	def destroy(self):
 		if self.ragdollparts != None:
 			for name in self.ragdollparts:
@@ -321,14 +330,14 @@ class ActorPlayer(player.CorePlayer):
 			if evt != None and self.npc_state == -2:
 				self.npc_state = 0
 
-			if act == None and self.npc_state >= 1:
+			if act == None and 0 < self.npc_state < 30:
 				self.npc_state = -1
 
 			if self.npc_state >= 0:
 				if act != None:
 					self.npc_state += 1
 				else:
-					self.npc_state = 0
+					self.npc_state = 50*(self.npc_state>40)
 
 			if flw != None:
 				if self.npc_state < -2:
@@ -342,12 +351,34 @@ class ActorPlayer(player.CorePlayer):
 				if vec.length > 10:
 					self.npc_state = -1
 				else:
-					self.npc_spot = (0,1,0,1)
+					if self.npc_state < 30:
+						self.npc_spot = (0,0,1,1)
 					self.sendEvent("NPC", flw.sender, "FOLLOW", "SEND")
 
-				if self.npc_state > 30 and ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
-					self.npc_state = -2
-					self.active_state = self.ST_IdleRD
+				if 30 < self.npc_state < 40:
+					if ("Ragdoll"+self.owner.name) in base.SC_SCN.objectsInactive:
+						self.npc_state = -2
+						self.active_state = self.ST_IdleRD
+					else:
+						self.npc_state = 50
+
+				if self.npc_state >= 50:
+					owner.applyForce(-self.gravity, False)
+					owner.applyForce(owner.worldLinearVelocity*-3, False)
+					self.jump_state = "FALLING"
+					ground = None
+					if evt != None:
+						self.npc_state = 60
+					if act != None:
+						if self.npc_state < 55:
+							self.npc_state = 50
+					if self.npc_state > 90:
+						self.npc_state = -2
+
+				for obj in self.collisionList:
+					cls = obj.get("Class", None)
+					if "COLLIDE" in obj and cls != None:
+						self.npc_spot = (1,0,0,1)
 
 			elif self.npc_state < -10:
 				self.npc_leader = None
@@ -392,7 +423,7 @@ class ActorPlayer(player.CorePlayer):
 			for obj in self.collisionList:
 				cls = obj.get("Class", None)
 				if "COLLIDE" in obj and cls != None:
-					self.npc_spot = (1,0,0,1)
+					self.npc_spot = (0,1,0,1)
 					self.sendEvent("INTERACT", cls, "SEND", OBJECT=obj, TYPE="COLLIDE")
 
 			veh = self.getAllEvents("INTERACT", "RECEIVE")
@@ -1242,8 +1273,8 @@ class RedPlayer(ActorPlayer):
 		LOOK = keymap.BINDS["PLR_LOOKUP"].axis() - keymap.BINDS["PLR_LOOKDOWN"].axis()
 
 		msX, msY = keymap.MOUSELOOK.axis()
-		TURN = (msX*80)+(TURN) #*abs(TURN))
-		LOOK = (-msY*120)+(LOOK) #*abs(LOOK))
+		TURN = (msX*80)+(TURN*abs(TURN))
+		LOOK = (-msY*120)+(LOOK*abs(LOOK))
 
 		if abs(TURN) > 1:
 			TURN = 1-(2*(TURN<0))

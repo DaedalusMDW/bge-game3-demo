@@ -10,6 +10,7 @@ config.LIBRARIES = [
 	"Zephyr1",
 	"StarWars",
 	"Stargate",
+	"GameCars",
 ]
 
 config.LIBLOAD_TYPE = "NORMAL"
@@ -21,6 +22,7 @@ config.CAMERA_CLIP = [0.1, 100000]
 config.MOUSE_BUFFER = True	# False to remove mouse input processing
 config.FPS_CAP = 60		# Set 0 for uncapped, -1 for use-framerate capped.
 #config.FONT_SCALE = 0.3	# Scale font texture, screen width (as 16/9) divided by 6400.
+#config.IGNORE_DISPLAY = True	# Skips the fullscreen and resolution settings for high refresh rate monitors. UPBGE forces 60hz for some reason.
 
 config.DEFAULT_PLAYER = "Actor"
 

@@ -23,12 +23,18 @@ class HyperLane(base.CoreObject):
 		dict["RELEASE"] = self.owner.get("RELEASE", True)
 		dict["ARRIVE"] = self.owner.get("ARRIVE", dict["RADIUS"])
 		dict["BLOCK"] = self.owner.get("BLOCK", dict["RADIUS"])
+		dict["WORLD"] = self.owner.get("WORLD", False)
 
 		return dict
 
 	def defaultStates(self):
 		super().defaultStates()
 		self.active_state = self.ST_Idle
+
+	def ST_Startup(self):
+		if self.data["WORLD"] == True:
+			print("HYPERWORLD:", self.data["NAME"])
+			self.removeContainerParent(orphan=False)
 
 	def ST_Idle(self):
 		n = self.data["NAME"]
@@ -228,7 +234,7 @@ class HyperRing(base.CoreObject):
 						cv = col.sender.owner.worldPosition-owner.worldPosition
 						cr = cv.normalized().angle(chk)
 						ca = math.sin(cr)*cv.length
-						if col != evt and cv.length < vec.length-ce and ca < cd and self.toDeg(cr) < 90:
+						if col is not evt and cv.length < vec.length-ce and ca < cd and self.toDeg(cr) < 90:
 							z += 1
 							hud.color = (1,0,0,1)
 							owner["TARGET"] = name+" - BLOCKED: "+cn

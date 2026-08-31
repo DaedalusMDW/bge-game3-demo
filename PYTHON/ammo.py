@@ -102,7 +102,7 @@ def MISSILE(cont):
 
 	obj, pnt, nrm = owner.rayCast(rayto, rayfrom, 0, "", 1, 0, 0)
 
-	if obj != None and owner["ROOTOBJ"] != obj:
+	if obj != None and owner["ROOTOBJ"] is not obj:
 		print("HIT", obj)
 		owner["TIME"] = -1
 
@@ -168,7 +168,7 @@ def GRENADE(cont):
 
 	obj, pnt, nrm = owner.rayCast(rayto, rayfrom, 0.5, "", 1, 0, 0)
 
-	if obj != None and owner["ROOTOBJ"] != obj:
+	if obj != None and owner["ROOTOBJ"] is not obj:
 		cls = obj.get("Class", None)
 		if cls != None:
 			cls.sendEvent("MODIFIERS", HEALTH=-40, IMPULSE=1)

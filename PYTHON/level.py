@@ -5,7 +5,7 @@
 import math
 import mathutils
 
-from bge import logic, events, render, types, constraints
+from bge import logic, events, render, types, constraints, texture
 
 from game3 import GAMEPATH, keymap, settings, config, base, player, viewport, world
 
@@ -64,7 +64,7 @@ def CHECKPOINT_SAVE(cont):
 		plr = base.PLAYER_CLASSES.get(cur, None)
 
 	for cls in owner["COLLIDE"]:
-		if plr != None and cls == plr:
+		if plr != None and cls is plr:
 			print("CHECKPOINT SAVE", name)
 			check = []
 			for cls in logic.UPDATELIST:
@@ -96,7 +96,7 @@ def CHECKPOINT_LOAD(cont):
 		plr = base.PLAYER_CLASSES.get(cur, None)
 
 	for cls in owner["COLLIDE"]:
-		if plr != None and cls == plr:
+		if plr != None and cls is plr:
 			logic.globalDict["PROFILES"][base.CURRENT["Profile"]] = settings.json.loads(CHKPNT)
 			world.openBlend("RESUME")
 
@@ -212,6 +212,50 @@ def JUMPPAD(cont):
 	owner["RAYFOOT"] = None
 
 
+# Neon Nitro
+def BOOSTBOX(cont):
+
+	owner = cont.owner
+
+	cb = cont.sensors["Collision"]
+
+	speed = owner.get("SPEED", 100.0)
+	mx = owner.get("FORCE", 1.0)
+	b = owner.get("MASS", True)
+
+	yref = owner.getAxisVect((0,speed,0))
+
+	s = False
+	if speed < 0:
+		s = True
+		speed = abs(speed)
+		yref *= 0
+	if speed < 1:
+		speed = 1
+
+	owner.color[0] = 0.0
+
+	for obj in cb.hitObjectList:
+		linv = obj.worldLinearVelocity
+
+		vec = yref-linv
+
+		yv = owner.worldOrientation.inverted()*vec
+
+		if yv[1] > speed:
+			yv[1] = speed
+			vec = owner.worldOrientation*yv
+
+		if b == True:
+			mx *= obj.mass
+
+		obj.applyForce(vec*mx, False)
+
+		c = vec.length/speed
+		if c > owner.color[0]:
+			owner.color[0] = c
+
+
 # Simple World Door
 def DOOR(cont):
 
@@ -266,7 +310,7 @@ def ZONE(cont):
 
 	for hit in owner["COLLIDE"]:
 		if getattr(hit, "PORTAL", None) == True and plr != None:
-			if hit == plr:
+			if hit is plr:
 				cls = hit
 			elif owner.get("VEHICLE", True) == True:
 				if plr in hit.getChildren():
@@ -445,7 +489,7 @@ def SUN(cont):
 	Z = owner.get("Z", None)
 	D = owner.get("D", 8)
 
-	if viewport.VIEWCLASS != None and scene.active_camera == viewport.getObject("Camera"):
+	if viewport.VIEWCLASS != None and scene.active_camera is viewport.getObject("Camera"):
 		wp = viewport.VIEWCLASS.getWorldPosition()
 	else:
 		wp = scene.active_camera.worldPosition
@@ -460,6 +504,99 @@ def SUN(cont):
 	if Z == True or Z == None:
 		if abs(vec[2]) > D:
 			owner.worldPosition[2] = wp[2]
+
+
+# We'll All Float On Alright
+def FLOATON(cont):
+
+	owner = cont.owner
+	scene = owner.scene
+
+	cb = cont.sensors["Collision"]
+
+	if "_WT_LT" not in owner:
+		owner["_WT_LT"] = []
+
+	for obj in cb.hitObjectList:
+		radius = obj.get("WT_RADIUS", 1)
+		if radius > 0.1 and obj.get("WATER", False) == True:
+			drag = obj.get("WT_DRAG", 0)
+			bouy = obj.get("WT_BOUY", 0)
+			zl = obj.get("WT_ZL", 0)
+			mass = obj.mass
+			linv = obj.worldLinearVelocity
+			angv = obj.worldAngularVelocity
+
+			# Get the depth
+			vec = obj.worldPosition-owner.worldPosition
+			pos = owner.worldOrientation.inverted()*vec
+
+			zref = pos[2]
+			nrm = owner.getAxisVect((0,0,1))
+			if owner.get("WT_SPHERE", False) == True:
+				nrm = vec.normalized()
+				zref = vec.length
+
+			sd = (zref-owner.localScale[2]-radius)*-1
+			if sd < 0:
+				sd = 0
+			#sd = sd*(1/owner.get("WT_DEPTH", 1))
+
+			# Feedback Props
+			obj["_WT_SD"] = sd
+			if obj not in owner["_WT_LT"]:
+				obj["_WT_FX"] = "HIT"
+				owner["_WT_LT"].append(obj)
+				print("WATER ADD -", obj.name)
+			else:
+				obj["_WT_FX"] = "FLOAT"
+
+			# Slow it down
+			bouy *= sd
+			vec = -linv*drag*radius*linv.length*sd
+
+			obj.applyForce(vec+(nrm*bouy), False)
+
+			obj.applyTorque(-angv*drag*radius*sd, False)
+
+			# Upright
+			ori = owner.worldOrientation.inverted()*obj.getAxisVect((0,0,zl*drag))
+			obj.applyTorque((ori[1], -ori[0], 0), True)
+
+	# reset when left
+	for old in list(owner["_WT_LT"]):
+		if old not in cb.hitObjectList:
+			if old.invalid == False:
+				old["_WT_SD"] = 0
+				old["_WT_FX"] = "OFF"
+				print("WATER REMOVE -", old.name)
+			owner["_WT_LT"].remove(old)
+
+
+def VIDEO(cont):
+	owner = cont.owner
+
+	return
+
+	if "_TEXTURE" not in owner:
+		owner["_VIDEO"] = texture.VideoFFmpeg(GAMEPATH+owner["FILE"])
+		owner["_VIDEO"].framerate = owner["SPEED"]
+		owner["_TEXTURE"] = texture.Texture(owner)
+		owner["_TEXTURE"].source = owner["_VIDEO"]
+
+		owner["_TIMER"] = 0.0
+		if owner["LOOP"] == True:
+			owner["_VIDEO"].repeat = -1
+		owner["_VIDEO"].play()
+
+	if owner["_TIMER"] >= owner["FRAMES"]:
+		owner["_VIDEO"].stop()
+		if owner["LOOP"] == True:
+			owner["_VIDEO"].play()
+			owner["_TIMER"] = 0
+	else:
+		owner["_TEXTURE"].refresh(True)
+		owner["_TIMER"] += 1*owner["SPEED"]
 
 
 # Grass Builder
@@ -816,10 +953,10 @@ def CAMNODE(cont):
 
 	matid = owner.get("MATID", None)
 
-	if matid == None: #or type(matid) == str:
+	if matid == None: #or type(matid) is str:
 		owner["MATID"] = 0
 		name = "CamPath"
-		if type(matid) == str:
+		if type(matid) is str:
 			name = matid
 		for id in range(len(mesh.materials)):
 			if mesh.getMaterialName(id) == "MA"+name:

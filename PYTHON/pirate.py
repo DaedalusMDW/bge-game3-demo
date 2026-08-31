@@ -28,13 +28,12 @@ class CoreSeaport(base.CoreObject):
 
 		if name not in base.WORLD:
 			dict = {"Object":self.OBJECT, "Data":None, "Portal":None}
-			base.WORLD[name] = {"Ship":dict, "Dict":self.dict, "Frame":0}
+			base.WORLD[name] = {"Ship":dict, "Frame":0}
 			base.WORLD[name]["Map"] = base.CURRENT["Level"]
 			base.WORLD[name]["CurMap"] = base.CURRENT["Level"]
 			self.active_state = self.ST_Disabled
 
 		self.worldcache = base.WORLD[name]
-		self.dict = self.worldcache["Dict"]
 
 		super().doLoad()
 
@@ -107,7 +106,7 @@ class CoreSeaport(base.CoreObject):
 		self.worldcache["CurMap"] = ""
 		self.worldcache["Frames"] = end
 
-		if scene.active_camera == base.SC_CAM:
+		if scene.active_camera is base.SC_CAM:
 			scene.active_camera = cam
 
 		self.active_state = self.ST_Active
@@ -119,7 +118,7 @@ class CoreSeaport(base.CoreObject):
 		if self.worldcache["Frames"] <= 0:
 			if self.worldcache["Map"] != base.CURRENT["Level"]:
 				self.active_state = self.ST_Disabled
-				if scene.active_camera == self.ship_anim.children["ShipCinematic.Camera"]:
+				if scene.active_camera is self.ship_anim.children["ShipCinematic.Camera"]:
 					base.PROFILE["Portal"][self.worldcache["Map"]+owner.name] = {}
 					world.openBlend(self.worldcache["Map"])
 				else:
@@ -180,10 +179,10 @@ class Red1(CoreShip):
 	NAME = "RedOne"
 
 	LOD_ACTIVE = 500
-	LOD_FREEZE = 1000
-	LOD_PROXY = 10000
-	OBJ_HIGH = ["Mesh", "COL"]
+	LOD_FREEZE = 2000
+	LOD_PROXY = 30000
+	OBJ_HIGH = ["Mesh", "Floors", "COL"]
 	OBJ_LOW  = ["Mesh"]
-	OBJ_PROXY = ["Mesh"]
+	OBJ_PROXY = ["LOW"]
 
 

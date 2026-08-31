@@ -44,8 +44,8 @@ class Donut(world.DynamicWorldTile):
 		cls.gravity = dvec.normalized()*self.radius_mass
 		cls.air_drag = 1.0
 
-	def checkCoords(self, cls):
-		if cls.CONTAINER == "LOCK" or cls == self:
+	def checkCoords(self, cls, filter=True):
+		if cls.CONTAINER == "LOCK" or cls is self:
 			return None
 
 		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
@@ -176,8 +176,8 @@ class CityBase(AmbientTile):
 
 		self.active_post.append(self.PS_Ambient)
 
-	def checkCoords(self, cls):
-		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls == self:
+	def checkCoords(self, cls, filter=True):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls is self:
 			return None
 
 		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
@@ -235,8 +235,8 @@ class VoidHut(AmbientTile):
 	NAME = "A Hut in Space"
 	CONTAINER = "LOCK"
 	PROPAGATE = False
-	LOD_ACTIVE = 200
-	LOD_FREEZE = 500
+	LOD_ACTIVE = 50
+	LOD_FREEZE = 100
 	LOD_PROXY = 10000
 	OBJ_HIGH = ["Mesh", "COL", "Lights"]
 	OBJ_LOW  = ["Mesh"]
@@ -248,8 +248,8 @@ class VoidHut(AmbientTile):
 		cls.air_drag = 1
 		cls.env_dim = list(self.env_col)
 
-	def checkCoords(self, cls):
-		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls == self:
+	def checkCoords(self, cls, filter=True):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls is self:
 			return None
 
 		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
@@ -262,6 +262,175 @@ class VoidHut(AmbientTile):
 			return True
 
 		return False
+
+
+class GreenContainer(AmbientTile):
+
+	NAME = "ALIENS"
+	CONTAINER = "LOCK"
+	PROPAGATE = False
+	LOD_ACTIVE = 50
+	LOD_FREEZE = 100
+	LOD_PROXY = 10000
+	OBJ_HIGH = ["Mesh"]
+	OBJ_LOW  = ["Mesh"]
+	OBJ_PROXY = ["LOW"]
+
+	def checkCoords(self, cls, filter=True):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls is self:
+			return None
+
+		for chkpnt in cls.getOriginBounds():
+			pnt = self.getLocalSpace(self.owner, chkpnt)
+
+			if abs(pnt[0]) > 3.1:
+				return False
+
+			if abs(pnt[1]) > 3.1:
+				return False
+
+			if abs(pnt[2]) > 2:
+				return False
+
+			return True
+
+		return False
+
+	def applyContainerProps(self, cls):
+		cls.gravity = self.owner.getAxisVect((0,0,-9.8))
+		cls.air_drag = 1.0
+		x = (cls.owner.worldPosition-self.owner.worldPosition).length/4
+		if x > 1:
+			x = 1
+		cls.env_dim = (1.2-(x*0.2), 2.0-x, 1.2-(x*0.2), 1)
+
+class GreenCorner(GreenContainer):
+
+	NAME = "Hall Corner"
+
+class GreenCross(GreenContainer):
+
+	NAME = "Hall Intersection"
+
+class GreenTee(GreenContainer):
+
+	NAME = "Hall Split"
+
+class GreenTube(GreenContainer):
+
+	NAME = "Hall Segment"
+
+class GreenRoomCenter(GreenContainer):
+
+	NAME = "Room Center"
+
+class GreenRoomCorner(GreenContainer):
+
+	NAME = "Room Corner"
+
+class GreenRoomWall(GreenContainer):
+
+	NAME = "Room Wall"
+
+class GreenRoomDoor(GreenContainer):
+
+	NAME = "Room Door"
+
+class GreenRoomDoorL(GreenContainer):
+
+	NAME = "Room Door Side L"
+
+class GreenRoomDoorR(GreenContainer):
+
+	NAME = "Room Door Side R"
+
+class GreenDMP(GreenContainer):
+
+	NAME = "Outpost"
+	CONTAINER = "LOCK"
+	PROPAGATE = False
+	LOD_ACTIVE = 200
+	LOD_FREEZE = 400
+	LOD_PROXY = 10000
+	OBJ_HIGH = ["Mesh", "Details", "Lights", "COL"]
+	OBJ_LOW  = ["Mesh"]
+	OBJ_PROXY = ["LOW"]
+
+
+class GreenDock(base.CoreObject):
+
+	NAME = "Outpost Dock"
+	CONTAINER = "LOCK"
+
+	def defaultChildren(self):
+		items = []
+
+		if self.owner.get("SILVERBIRD", False) == True:
+			items.append({"Object":"Silverbird", "Data":None, "Parent":"Root"})
+
+		return items
+
+	def ST_Startup(self):
+		self.objects["Sensor"]["COLLIDE"] = []
+
+		if self.getSlotChild("Root") == None:
+			self.stateSwitch("DISABLED")
+		else:
+			self.stateSwitch("ACTIVE")
+
+	def stateSwitch(self, state=None):
+		panel = self.objects["Panel"]
+		block = self.objects["COL"]
+		tube = self.objects["SL"]
+
+		if state == None:
+			self.active_state = getattr(self, self.data["ACTIVE_STATE"], self.active_state)
+
+		elif state == "DISABLED":
+			panel.color[0] = 1.0
+			block.localPosition[2] = 0.0
+			block.localScale = (1.0, 1.0, 1.0)
+			tube.localScale = (1.0, 0.5, 1.0)
+
+			self.active_state = self.ST_Disabled
+
+		elif state == "ACTIVE":
+			panel.color[0] = 0.0
+			block.localPosition[2] = 2.125
+			block.localScale = (0.5, 0.05, 1.0)
+			tube.localScale = (1.0, 1.0, 1.0)
+
+			self.active_state = self.ST_Active
+
+	def ST_Disabled(self):
+		owner = self.owner
+		spawn = self.objects["Exit"]
+
+		evt = self.getFirstEvent("SILVERBIRD", "DOCK")
+
+		if evt != None:
+			evt.sender.setContainerParent(self, "Root")
+			self.stateSwitch("ACTIVE")
+
+		elif self.getSlotChild("Root") == None:
+			for cls in self.objects["Sensor"]["COLLIDE"]:
+				self.sendEvent("SILVERBIRD", cls, "PARKING", SPAWN=spawn)
+
+	def ST_Active(self):
+		owner = self.owner
+
+		cls = self.getSlotChild("Root")
+
+		evt = self.getFirstEvent("SILVERBIRD", "RELEASE")
+
+		if cls == None:
+			self.stateSwitch("DISABLED")
+		elif evt != None:
+			cls.removeContainerParent(orphan=False)
+			self.stateSwitch("DISABLED")
+
+	def clearRayProps(self):
+		self.objects["Sensor"]["COLLIDE"] = []
 
 
 class PlanetTile(world.DynamicWorldTile):
@@ -279,6 +448,7 @@ class PlanetTile(world.DynamicWorldTile):
 	COLOR_ATMO = []
 	COLOR_SUN = []
 	COLOR_MIST = []
+	MIST_RANGE = (0, 500)
 
 	def defaultData(self):
 		self.space_planet = self.owner.get("PLANET", 900)
@@ -335,10 +505,11 @@ class PlanetTile(world.DynamicWorldTile):
 				scene["_SUN_COLOR"] = (self.getEnvMix(dvec, svec, self.ramp_sun), mx)
 			if dt > 0.2:
 				scene["_SUN_COLOR"] = (self.createVector(), mx)
-		if dist < self.space_atmo/4:
-			mx = 1-(mx*4)
+		if dist < self.space_atmo/3:
+			mx = 1-(mx*3)
 			if len(self.ramp_mist) > 0:
 				scene["_MIST_COLOR"] = (self.getEnvMix(dvec, svec, self.ramp_mist), mx)
+			scene["_MIST_RANGE"] = self.MIST_RANGE
 
 	def buildBorders(self):
 		self.active_pre.insert(0, self.PR_BorderPatrol)
@@ -362,8 +533,8 @@ class PlanetTile(world.DynamicWorldTile):
 		wp = owner.worldPosition+owner.getAxisVect((0,0,self.space_planet))+base.ORIGIN_OFFSET
 		cls.sendEvent("COMPASS", cls, "NORTH", POS=wp)
 
-	def checkCoords(self, cls):
-		if cls.invalid == True or cls == self:
+	def checkCoords(self, cls, filter=True):
+		if cls.invalid == True or cls is self:
 			return None
 
 		dvec = cls.getOwner().worldPosition-self.owner.worldPosition
@@ -433,11 +604,12 @@ class IcePlanetTile(PlanetTile):
 	(0.6, (0.0, 0.0, 0.0) ),
 	]
 
-	MIST_RANGE = 300
 	COLOR_MIST = [
 	(0.1, (0.0, 0.0, 0.9) ),
 	(0.6, (0.57, 0.3, 0.3) ),
 	]
+
+	MIST_RANGE = (0, 300)
 
 
 class WaterPlanetTile(PlanetTile):
@@ -456,11 +628,44 @@ class WaterPlanetTile(PlanetTile):
 	(0.6, (0.0, 0.0, 0.0) ),
 	]
 
-	MIST_RANGE = 300
 	COLOR_MIST = [
 	(0.1, (0.6, 0.3, 0.9) ),
 	(0.6, (0.6, 0.7, 0.2) ),
 	]
+
+	COLOR_MIST_WATER = [
+	(0.5, (0.57, 0.7, 0.1) ),
+	(0.0, (0.57, 0.7, 0.3) ),
+	]
+
+	MIST_RANGE = (100, 300)
+
+	def defaultData(self):
+		self.ramp_water = []
+		for col in self.COLOR_MIST_WATER:
+			new = Color((0,0,0))
+			new.hsv = list(col[1])
+			self.ramp_water.append( (col[0], Vector(new)) )
+
+		dict = super().defaultData()
+		return dict
+
+	def PS_Ambient(self):
+		super().PS_Ambient()
+
+		owner = self.owner
+		scene = owner.scene
+
+		pos = scene.active_camera.worldPosition
+		dvec = pos-owner.worldPosition
+		svec = pos-self.space_sun
+		dist = dvec.length
+
+		dt = svec.normalized().dot(dvec.normalized())
+
+		if dist < 900:
+			scene["_MIST_COLOR"] = (self.getEnvMix(dvec, svec, self.ramp_water), 1.0)
+			scene["_MIST_RANGE"] = (1, 10)
 
 
 class LavaPlanetTile(PlanetTile):
@@ -473,11 +678,12 @@ class LavaPlanetTile(PlanetTile):
 	(0.6, (0.0, 0.0, 0.0) ),
 	]
 
-	MIST_RANGE = 500
 	COLOR_MIST = [
 	(0.1, (0.0, 0.0, 0.5) ),
 	(0.6, (0.0, 0.0, 0.0) ),
 	]
+
+	MIST_RANGE = (0, 500)
 
 	def getEnvMix(self, dvec, svec, ramp):
 
@@ -513,11 +719,12 @@ class BigPlanet(PlanetTile):
 	(0.6, (0.0, 0.0, 0.0) ),
 	]
 
-	MIST_RANGE = 700
 	COLOR_MIST = [
 	(0.1, (0.11, 0.2, 0.8) ),
 	(0.6, (0.1, 0.2, 0.3) ),
 	]
+
+	MIST_RANGE = (0, 700)
 
 
 class PlanetSystem(world.CoreWorldTile):
@@ -565,8 +772,8 @@ class PlanetWorld(PlanetTile):
 		wp = self.owner.worldPosition+self.owner.getAxisVect((0,0,self.space_planet))+base.ORIGIN_OFFSET
 		cls.sendEvent("COMPASS", cls, "NORTH", POS=wp)
 
-	def checkCoords(self, cls):
-		if cls.CONTAINER == "LOCK" or cls == self:
+	def checkCoords(self, cls, filter=True):
+		if cls.CONTAINER == "LOCK" or cls is self:
 			return None
 
 		return True

@@ -11,7 +11,7 @@ SHIPMAN = None
 
 if "MARVEL" not in base.WORLD:
 	mvd = {"Object":"Zephyr1", "Data":None, "Portal":None}
-	base.WORLD["MARVEL"] = {"Ship":mvd, "Dict":None, "Map":"", "Frame":0, "Traveling":None, "QJ":False}
+	base.WORLD["MARVEL"] = {"Ship":mvd, "State":None, "Map":"", "Frame":0, "Traveling":None, "QJ":False}
 
 
 class LandingZone(base.CoreObject):
@@ -25,12 +25,18 @@ class LandingZone(base.CoreObject):
 
 		dict = super().defaultData()
 		dict["NAME"] = self.owner.get("NAME", self.owner.name)
+		dict["WORLD"] = self.owner.get("WORLD", False)
 
 		return dict
 
 	def defaultStates(self):
 		super().defaultStates()
 		self.active_state = self.ST_Idle
+
+	def ST_Startup(self):
+		if self.data["WORLD"] == True:
+			print("LZWORLD:", self.data["NAME"])
+			self.removeContainerParent(orphan=False)
 
 	def ST_Idle(self):
 		global SHIPMAN
@@ -70,16 +76,12 @@ class ZephyrShip(base.CoreObject):
 
 	def doLoad(self):
 		mvd = base.WORLD["MARVEL"]
-		if mvd["Dict"] == None:
-			mvd["Dict"] = self.dict
+		if mvd["State"] == None:
+			mvd["State"] = "ACTIVE"
 			mvd["Map"] = base.CURRENT["Level"]
 			mvd["CurMap"] = base.CURRENT["Level"]
 			mvd["LZ"] = "HOME"
 			mvd["CurLZ"] = "HOME"
-			self.active_state = self.ST_Disabled
-
-		self.dict = mvd["Dict"]
-		self.owner["DICT"] = self.dict
 
 		super().doLoad()
 
@@ -136,7 +138,7 @@ class ZephyrShip(base.CoreObject):
 		scene = owner.scene
 
 		if self.ship_anim != None:
-			if scene.active_camera == self.ship_cam:
+			if scene.active_camera is self.ship_cam:
 				scene.active_camera = base.SC_CAM
 			self.ship_anim.endObject()
 			self.ship_anim = None
@@ -183,7 +185,7 @@ class ZephyrShip(base.CoreObject):
 			self.ship_obj = None
 
 		if self.ship_anim != None:
-			if scene.active_camera == self.ship_cam:
+			if scene.active_camera is self.ship_cam:
 				scene.active_camera = base.SC_CAM
 			self.ship_anim.endObject()
 			self.ship_anim = None
@@ -192,7 +194,7 @@ class ZephyrShip(base.CoreObject):
 		if mvd["Traveling"] != base.CURRENT["Level"]:
 			mvd["Frame"] = 0
 			mvd["Traveling"] = None
-		if scene.active_camera == base.SC_CAM and mvd["Frame"] <= 0:
+		if scene.active_camera is base.SC_CAM and mvd["Frame"] <= 0:
 			print("Z TRAVEL", base.CURRENT["Level"])
 			mvd["Traveling"] = base.CURRENT["Level"]
 
@@ -226,26 +228,31 @@ class ZephyrShip(base.CoreObject):
 			qjd.color = obj.color
 			qjd.setParent(env, False, False)
 
-		self.ship_cam = self.ship_anim.children["ZephyrCinematic.Camera"]
-
-		cam = self.ship_cam
-		cam.near = base.config.CAMERA_CLIP[0]
-		cam.far = base.config.CAMERA_CLIP[1]
+		cam = self.ship_anim.children["ZephyrCinematic.Camera"]
 
 		name = self.ANIMSET
 		end = self.ANIMFRAMES[mode]
 
-		if mode != "Zone" and wrld == True:
+		if mode == "Zone":
+			if scene.active_camera is not base.SC_CAM:
+				mode = "Land"
+				end = self.ANIMFRAMES["Land"]
+			if "ANIMZONE" in obj:
+				name = obj["ANIMZONE"]
+				end = obj.get("ZONEFRAMES", end)
+		elif wrld == True:
 			name = obj.get("ANIMNAME", name)
 			end = obj.get(mode.upper()+"FRAMES", end)
-		elif mode == "Zone" and "ANIMZONE" in obj:
-			name = obj["ANIMZONE"]
-			end = obj.get("ZONEFRAMES", end)
 
 		if mvd["Frame"] <= 0:
 			mvd["Frame"] = end
 
 		start = end-mvd["Frame"]
+
+		cam.near = base.config.CAMERA_CLIP[0]
+		cam.far = base.config.CAMERA_CLIP[1]
+
+		self.ship_cam = cam
 
 		self.doAnim(env, "Zephyr."+name+mode+"Ship", (start,end))
 		self.doAnim(cam, "Zephyr."+name+mode+"Camera", (start,end))
@@ -295,7 +302,7 @@ class ZephyrShip(base.CoreObject):
 				mvd["Traveling"] = None
 				self.active_state = self.ST_Disabled
 
-				if scene.active_camera == self.ship_cam:
+				if scene.active_camera is self.ship_cam:
 					world.openBlend(mvd["Map"])
 
 				elif self.ship_anim != None:
@@ -443,6 +450,12 @@ class Zephyr(world.DynamicWorldTile):
 				ac[2] += c[2]*v*0.7
 
 		cls.env_dim = (ac[0], ac[1], ac[2], 1.0)
+
+	def getOriginBounds(self):
+		owner = self.getOwner()
+		chkpnt = [owner.worldPosition,
+			self.getWorldSpace(owner, (0, -25, -5))]
+		return chkpnt
 
 	def ST_Startup(self):
 		owner = self.objects["Root"]

@@ -289,7 +289,7 @@ class ZMissile(weapon.CoreWeapon):
 				if self.target == None:
 					l = []
 					for obj in owner.scene.objects:
-						if obj.parent == None and obj != plrobj and "Class" in obj:
+						if obj.parent == None and obj is not plrobj and "Class" in obj:
 							if obj["Class"].data.get("PHYSICS", "") in ["DYNAMIC", "RIGID"]:
 								l.append(obj)
 								#print("TARGET:", obj)
@@ -316,7 +316,7 @@ class ZMissile(weapon.CoreWeapon):
 				ammo.worldPosition = owner.worldPosition+owner.getAxisVect((0,2,0))
 				ammo["ROOTOBJ"] = plrobj
 				ammo["DAMAGE"] = 200
-				ammo["IMPULSE"] = 10
+				ammo["IMPULSE"] = 50
 				ammo["RADIUS"] = 20
 				ammo["TIME"] = 1000
 				ammo["TARGET"] = self.target
@@ -611,7 +611,7 @@ class HandGun(weapon.CorePlayerWeapon):
 class GravGun(weapon.CorePlayerWeapon):
 
 	NAME = "Not a Gun"
-	SLOTS = ["Hip_R", "Hip_L"]
+	SLOTS = ["Hip_L", "Hip_R"]
 	TYPE = "RANGED"
 	HAND = "MAIN"
 	WAIT = 20

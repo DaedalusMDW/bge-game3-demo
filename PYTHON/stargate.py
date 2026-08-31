@@ -36,9 +36,9 @@ class RingBeam(world.DynamicWorldTile):
 	HIGH_PRIORITY = True
 	CONTAINER = "LOCK"
 
-	LOD_ACTIVE = 1000
-	LOD_FREEZE = 2000
-	LOD_PROXY = 3000
+	LOD_ACTIVE = 50
+	LOD_FREEZE = 100
+	LOD_PROXY = 200
 	OBJ_HIGH = []
 	OBJ_LOW  = []
 	OBJ_PROXY = []
@@ -86,8 +86,8 @@ class RingBeam(world.DynamicWorldTile):
 
 		return dict
 
-	def checkCoords(self, cls):
-		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls == self or self.home != None:
+	def checkCoords(self, cls, filter=True):
+		if cls.invalid == True or cls.CONTAINER == "LOCK" or cls is self or self.home != None:
 			return None
 
 		lp = self.getLocalSpace(self.owner, cls.getOwner().worldPosition)
@@ -128,6 +128,15 @@ class RingBeam(world.DynamicWorldTile):
 
 		if state == "ACTIVE":
 			self.active_state = self.ST_Active
+
+	def PR_BorderPatrol(self):
+		dist = logic.VIEWPORT.getWorldPosition()-self.getOwner().worldPosition
+		dist = dist.length
+
+		if dist > self.LOD_ACTIVE:
+			return
+		else:
+			return super().PR_BorderPatrol()
 
 	def ST_Disabled(self):
 		stop = False
@@ -179,7 +188,7 @@ class RingBeam(world.DynamicWorldTile):
 
 		if self.timer == g:
 			self.gfx = scene.addObject(n+".GFX", owner, 0)
-			self.gfx.setParent(owner, True, False)
+			self.gfx.setParent(owner, False, False)
 			self.gfx.localPosition = (0,0,0)
 			f = (0,150)
 			if d[2] > 0:
@@ -212,6 +221,10 @@ class RingBeam(world.DynamicWorldTile):
 				cls.setContainerParent(self)
 			#self.home = -2
 
+		if g+70 <= self.timer < g+80:
+			if self.home == True and logic.HUDCLASS != None:
+				logic.HUDCLASS.doBlackOut("FADE")
+
 		if g+150 <= self.timer < g+245:
 			if self.wait <= 10:
 				if self.data["FLOOR"] == True:
@@ -229,12 +242,12 @@ class RingBeam(world.DynamicWorldTile):
 
 		if self.wait == 0 and self.timer >= 0:
 			off = scene.addObject(n+".Offset", owner, 0)
-			off.setParent(owner, True, False)
+			off.setParent(owner, False, False)
 			off.localPosition = (0,0,0)
 			self.doAnim(off, a, (0,180))
 			self.rings.append(off)
 			obj = scene.addObject(n+".Mesh", owner, 0)
-			obj.setParent(off, True, False)
+			obj.setParent(off, False, False)
 			if self.data["FLOOR"] == True:
 				obj.localPosition = (0,0,((90-self.timer)/40))
 			else:
@@ -271,7 +284,7 @@ class RingBeam(world.DynamicWorldTile):
 class HandDevice(weapon.CoreWeapon):
 
 	NAME = "Modified Hand Device"
-	TYPE = "TOOLS"
+	TYPE = "RANGED"
 	SLOTS = ["Hip_L", "Hip_R"]
 	SCALE = 0.2
 	OFFSET = (0,0,0)
@@ -328,6 +341,8 @@ class HandDevice(weapon.CoreWeapon):
 		owner = self.getOwner()
 
 		plr = self.owning_player
+		slot = self.owning_slot
+
 		plrobj = plr.getOwner()
 
 		base.SendEvent(self, "GOAULD", "RINGS", "SEND")
@@ -345,6 +360,12 @@ class HandDevice(weapon.CoreWeapon):
 			self.data["HUD"]["Stat"] = 100-self.wt
 			#self.stateSwitch(False)
 			return
+
+		wd = plr.data["WPDATA"]
+		cd = wd["WHEEL"][self.TYPE]
+
+		wd["CURRENT"] = self.TYPE
+		cd["ID"] = cd["LIST"].index(slot)
 
 		if keymap.BINDS["WP_UP"].tap() == True:
 			self.id += 1
@@ -420,6 +441,9 @@ class Gateship(vehicle.CoreAircraft):
 	AERO = {"POWER":20000, "REVERSE":1.0, "HOVER":0, "LIFT":0, "TAIL":0, "DRAG":(1,1,1)}
 
 	def defaultData(self):
+		self.env_dim = None
+		self.anim_st = 0
+
 		dict = super().defaultData()
 		dict["MODE"] = "CLOSED"
 		dict["FRAMES"] = 0
@@ -439,6 +463,7 @@ class Gateship(vehicle.CoreAircraft):
 
 		self.active_post.append(self.airDrag)
 		self.active_post.append(self.airLift)
+		self.active_post.append(self.PS_Ambient)
 		self.active_post.append(self.PS_Anim)
 		self.stargate = None
 
@@ -597,64 +622,134 @@ class Gateship(vehicle.CoreAircraft):
 			self.data["CAMERA"]["Orbit"] = False
 			self.active_state = self.ST_Wait
 
+	def PS_Ambient(self):
+		if self.env_dim == None:
+			cls = self.getParent()
+			amb = 0
+			if cls != None:
+				amb = cls.dict.get("DIM", amb)
+			self.env_dim = (amb+1, amb+1, amb+1, 1.0)
+
+		self.objects["Mesh"].color = self.env_dim
+
+		self.env_dim = None
+
 	def PS_Anim(self):
 		owner = self.getOwner()
+		ambcol = self.objects["Mesh"].color
 
+		eng = ""
 		if self.data["MODE"] == "OPENING":
 			self.data["FRAMES"] += 1
+			eng = "PLAY"
 		elif self.data["MODE"] == "CLOSING":
 			self.data["FRAMES"] -= 1
-		if self.data["FRAMES"] <= 0:
+			eng = "PLAY"
+
+		if self.data["FRAMES"] < 0:
 			self.data["MODE"] = "CLOSED"
 			self.data["FRAMES"] = 0
-		elif self.data["FRAMES"] >= 120:
+			eng = "STOP"
+		elif self.data["FRAMES"] > 120:
 			self.data["MODE"] = "OPEN"
 			self.data["FRAMES"] = 120
+			eng = "STOP"
+
+		if self.anim_st == 0:
+			eng = "PLAY"
+		elif self.anim_st == 1 and eng != "PLAY":
+			eng = "STOP"
 
 		for key in ["Pod_L", "Eng_L", "Pod_R", "Eng_R"]:
 			obj = self.objects[key]
-			self.doAnim(obj, "NONE", (-5,125), MODE="LOOP")
-			self.doAnim(obj, SET=self.data["FRAMES"])
+			if eng == "PLAY":
+				self.doAnim(obj, "NONE", (-5,125), MODE="LOOP")
+				self.doAnim(obj, SET=self.data["FRAMES"])
+			elif eng == "STOP":
+				self.doAnim(obj, STOP=True)
+			obj.color = list(ambcol)
 
+		dam = ""
 		if self.data["DOORSTATE"] == "OPENING":
-			self.data["DOORFRAMES"] += 2
+			self.data["DOORFRAMES"] += 5
+			dam = "PLAY"
 		elif self.data["DOORSTATE"] == "CLOSING":
-			self.data["DOORFRAMES"] -= 2
-		if self.data["DOORFRAMES"] <= 0:
+			self.data["DOORFRAMES"] -= 5
+			dam = "PLAY"
+
+		if self.data["DOORFRAMES"] < 0:
 			self.data["DOORSTATE"] = "CLOSED"
 			self.data["DOORFRAMES"] = 0
-		elif self.data["DOORFRAMES"] >= 360:
+			dam = "STOP"
+		elif self.data["DOORFRAMES"] > 360:
 			self.data["DOORSTATE"] = "OPEN"
 			self.data["DOORFRAMES"] = 360
+			dam = "STOP"
 
-		self.doAnim("Door", "NONE", (-5,365), MODE="LOOP")
-		self.doAnim("Door", SET=self.data["DOORFRAMES"])
+		if self.anim_st == 0:
+			dam = "PLAY"
+		elif self.anim_st == 1 and dam != "PLAY":
+			dam = "STOP"
+
+		if dam == "PLAY":
+			self.doAnim("Door", "NONE", (-10,370), MODE="LOOP")
+			self.doAnim("Door", SET=self.data["DOORFRAMES"])
+		if dam == "STOP":
+			self.doAnim("Door", STOP=True)
+		self.objects["Door"].color = list(ambcol)
+
+		frames = self.data["SEATFRAMES"]
 
 		for key in ["Seat_1", "Seat_2", "Seat_3", "Seat_4"]:
-			frames = self.data["SEATFRAMES"]
-			x = -1
+			obj = self.objects[key]
+			v = frames.get(key, 0)
+			x = 0
+			chr = ""
 			if self.player_seats[key] != None and self.active_state != self.ST_Wait:
-				x = 1
-			if self.active_state == self.ST_Walking and 1 > frames[key] > 59:
-				x = 0
-			frames[key] = frames.get(key, 0)+x
-			if frames[key] < 0:
-				frames[key] = 0
-			if frames[key] > 60:
-				frames[key] = 60
-			obj = self.objects[key]
-			self.doAnim(obj, "NONE", (-5,65), MODE="LOOP")
-			self.doAnim(obj, SET=frames[key])
+				if v < 0:
+					v = 0
+				if v <= 60:
+					x = 1
+					chr = "PLAY"
+			else:
+				if v > 60:
+					v = 60
+				if v >= 0:
+					x = -1
+					chr = "PLAY"
 
-		for key in ["Col_L", "Col_R", "Col_D"]:
-			obj = self.objects[key]
-			pod = obj.parent
-			pos = obj.localPosition.copy()
-			ori = obj.localOrientation.copy()
-			obj.removeParent()
-			obj.setParent(pod, True, False)
-			obj.localPosition = pos
-			obj.localOrientation = ori
+			frames[key] = v+x
+			if frames[key] == -1:
+				frames[key] = -2
+				chr = "STOP"
+			elif frames[key] == 61:
+				frames[key] = 62
+				chr = "STOP"
+
+			if self.anim_st == 0:
+				chr = "PLAY"
+			elif self.anim_st == 1 and chr != "PLAY":
+				chr = "STOP"
+
+			if chr == "PLAY":
+				self.doAnim(obj, "NONE", (-5,65), MODE="LOOP")
+				self.doAnim(obj, SET=frames[key])
+			if chr == "STOP":
+				self.doAnim(obj, STOP=True)
+
+		if self.data["MODE"] in {"OPENING", "CLOSING"} or self.anim_st <= 2:
+			for key in ["Col_L", "Col_R", "Col_D"]:
+				obj = self.objects[key]
+				pod = obj.parent
+				pos = obj.localPosition.copy()
+				ori = obj.localOrientation.copy()
+				obj.removeParent()
+				obj.setParent(pod, True, False)
+				obj.localPosition = pos
+				obj.localOrientation = ori
+
+		if self.anim_st <= 2:
+			self.anim_st += 1
 
 	def ST_Idle(self):
 		all = self.getAllEvents("INTERACT", "SEND")
@@ -923,11 +1018,11 @@ class IrisControl(base.CoreObject):
 		owner = self.objects["Root"]
 		gate = self.STARGATE["Gate"]["Data"]
 
-		if gate["IRIS"]["State"] == "OPEN" and gate["IRIS"]["Timer"] <= 0:
+		if gate["IRIS"]["State"] == "OPEN" and gate["IRIS"]["Timer"] < 0:
 			if self.checkClicked() == True:
 				gate["IRIS"]["State"] = "CLOSE"
 
-		elif gate["IRIS"]["State"] == "CLOSE" and gate["IRIS"]["Timer"] >= 120:
+		elif gate["IRIS"]["State"] == "CLOSE" and gate["IRIS"]["Timer"] > 120:
 			if self.checkClicked() == True:
 				gate["IRIS"]["State"] = "OPEN"
 
@@ -956,6 +1051,7 @@ class CoreGate(base.CoreObject):
 		self.puddle = None
 		self.effect = None
 		self.back = []
+		self.iris_st = 0
 
 		self.env_dim = None
 
@@ -1144,8 +1240,8 @@ class CoreGate(base.CoreObject):
 		object = []
 
 		for hit in self.puddle["COLLIDE"]:
-			if getattr(hit, "PORTAL", None) == True and plr != None and hit != self:
-				if hit == plr:
+			if getattr(hit, "PORTAL", None) == True and plr != None and hit is not self:
+				if hit is plr:
 					player = hit
 				elif plr in hit.getChildren():
 					player = hit
@@ -1499,27 +1595,57 @@ class RedGate(CoreGate):
 
 		data = self.data["IRIS"]
 
-		if data["State"] == "OPEN" and data["Timer"] >= 0:
-			#COL.reinstancePhysicsMesh()
-			#COL.replaceMesh(COL.meshes[0], True, True)
+		chk = ""
 
-			data["Timer"] -= 1
-			if data["Timer"] == 120:
+		if self.iris_st < 2:
+			if self.iris_st == 0:
+				chk = "PLAY"
+			if self.iris_st == 1:
+				mesh.visible = (data["State"]=="CLOSE")
+				chk = "STOP"
+
+			self.iris_st += 1
+
+		elif data["State"] == "OPEN":
+			if data["Timer"] > 120:
+				data["Timer"] = 120
+
+			if data["Timer"] >= 0:
+				data["Timer"] -= 1
+				mesh.visible = True
+				chk = "PLAY"
+
+			if data["Timer"] == 90:
 				self.setLights("ON")
 
-		elif data["State"] == "CLOSE" and data["Timer"] <= 120:
-			#COL.reinstancePhysicsMesh()
-			#COL.replaceMesh(COL.meshes[0], True, True)
+			if data["Timer"] == -1:
+				data["Timer"] = -2
+				mesh.visible = False
+				chk = "STOP"
 
-			data["Timer"] += 1
-			if data["Timer"] == 60:
+		elif data["State"] == "CLOSE":
+			if data["Timer"] < 0:
+				data["Timer"] = 0
+
+			if data["Timer"] <= 120:
+				data["Timer"] += 1
+				mesh.visible = True
+				chk = "PLAY"
+
+			if data["Timer"] == 90:
 				self.setLights("OFF")
 
-		self.doAnim(OBJECT=iris, NAME="IrisAction", FRAME=(-5,125), MODE="LOOP")
-		self.doAnim(OBJECT=iris, SET=data["Timer"])
+			if data["Timer"] == 121:
+				data["Timer"] = 122
+				chk = "STOP"
 
-		COL.reinstancePhysicsMesh()
-		mesh.visible = True #(data["Timer"]>0)
+		if chk == "PLAY":
+			self.doAnim(OBJECT=iris, NAME="IrisAction", FRAME=(-5,125), MODE="LOOP")
+			self.doAnim(OBJECT=iris, SET=data["Timer"])
+			COL.reinstancePhysicsMesh()
+		if chk == "STOP":
+			self.doAnim(OBJECT=iris, STOP=True)
+			COL.reinstancePhysicsMesh()
 
 	def PS_Chevron(self):
 		for id in range(9):
@@ -1527,7 +1653,7 @@ class RedGate(CoreGate):
 			ls["Glow"].color = list(ls["Light"].color)
 			ls[""].color = list(self.objects["Mesh"].color)
 			ls["Lock"].color = list(ls[""].color)
-		self.objects["Track"].color = list(self.objects["Mesh"].color)
+		self.objects["Track"].color = self.objects["Mesh"].color
 
 
 class RedDHD(CoreDHD):

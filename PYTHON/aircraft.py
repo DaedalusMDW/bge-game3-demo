@@ -142,7 +142,7 @@ class FireBird(vehicle.CoreAircraft):
 		mx = linV[1]
 		if mx > 5000:
 			mx = 5000
-		dampLin = (9.8-grav)/(9.8/0.1)
+		dampLin = (9.8-grav)/(9.8/0.02)
 		dampRot = (mx*0.002)+0.4
 
 		if dampRot >= 0.7:
@@ -162,10 +162,10 @@ class FireBird(vehicle.CoreAircraft):
 		tx, ty, tz = self.motion["Torque"]
 		v = linV.normalized()
 		l = ((linV.length*0.5)**2)*self.air_drag
-		x = self.createVector(vec=(-1, tz*0.02, 0)).normalized()
-		z = self.createVector(vec=( 0, tx*0.1,  1)).normalized()
+		x = self.createVector(vec=(-1, tz*0.01, 0)).normalized()
+		z = self.createVector(vec=( 0, tx*0.05,  1)).normalized()
 
-		self.owner.applyTorque((z.dot(v)*l, 0, x.dot(v)*l*0.5), True)
+		self.owner.applyTorque((z.dot(v)*l*2, 0, x.dot(v)*l), True)
 
 	def ST_Startup(self):
 		self.ANIMOBJ = self.objects["Rig"]

@@ -275,6 +275,9 @@ def RUN(cont):
 	refVec = Vector((0,0,1))
 	sunVec = sun.worldOrientation*refVec
 
+	if base.GAME_STATE not in ["TIMER", "DONE"]:
+		return
+
 	# DATA
 	group = owner.groupObject
 	if group == None:
