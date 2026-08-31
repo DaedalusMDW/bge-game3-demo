@@ -25,7 +25,7 @@ There is a continually expanding collection of example content to provide a vari
   - a simpler demo of container streaming
 ### Assets
 - Zephyr Ship
-  - this project was originally called the "Zephyr Demo" showcasing container streaming and persistance data being passed across game world data
+  - this project was originally called the "Zephyr Demo" showcasing container streaming and persistence data being passed across game world data
   - containers now have slots that children can be attached to on display as the shuttle docking
 - Vehicles
   - jets, atvs, cars, etc
@@ -40,16 +40,17 @@ There is a continually expanding collection of example content to provide a vari
   - V toggle third person
   - R to toggle camera orbit/follow
   - X activate weapons
-  - middle mouse to interact
-  - F is a generic mode toggle
+  - F to interact
+  - Q is a generic mode toggle
     - the player will float around for travel assist, shift for boost
-    - aircraft toggle landing gear
+    - vehicle flight states
+  - ctrl for walking mode and aircraft toggle landing gear
   - alt-` will drop all attachments, alt-number will drop specific attachment
-  - alt-pageup will snap you to the ground if you fall through
-  - alt-backspace is a "break glass in emergency" if you get stuck (may cause bugs)
+  - ctrl-pageup will snap you to the ground if you fall through
+  - ctrl-backspace is a "break glass in emergency" if you get stuck (may cause bugs)
 - Use ESC to open pause menu, f12 for screenshot
 - You can back out to launcher/menu and resume at any time
-- Use the SAVE and LOAD buttons to save the session to a file (do this when a bug occures and include with issue)
+- Use the SAVE and LOAD buttons to save the session to a file (do this when a bug occurs and include with issue)
 
 ## How to build:
 - Unzip the packaged game3 release "bge_game3_core-xxxxxx" to a folder called `game3`
