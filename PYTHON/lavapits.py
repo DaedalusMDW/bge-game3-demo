@@ -152,7 +152,7 @@ class EnergyContainer(world.DynamicWorldTile):
 	def getLodLevel(self):
 		return "ACTIVE"
 
-	def checkCoords(self, cls):
+	def checkCoords(self, cls, filter=True):
 		if cls.CONTAINER == "LOCK" or cls == self:
 			return None
 
@@ -181,7 +181,7 @@ class GreenContainer(world.DynamicWorldTile):
 	def getLodLevel(self):
 		return "ACTIVE"
 
-	def checkCoords(self, cls):
+	def checkCoords(self, cls, filter=True):
 		if cls.CONTAINER == "LOCK" or cls == self:
 			return None
 
